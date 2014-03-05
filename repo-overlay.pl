@@ -142,8 +142,7 @@ for my $repo (sort(repos())) {
 	    nsystem("mkdir -p import/'$dir'") or die;
 	    nsystem("mkdir -p export/'$dir'") or die;
 	} else {
-	    my $dirname = `dirname '$dir'`;
-	    chomp($dirname);	   
+	    my $dirname = dirname($dir);
 	    if ($dirchanged{$dirname}) {
 		if ($dirname ne  ".") {
 		    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
