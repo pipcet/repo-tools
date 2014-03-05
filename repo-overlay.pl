@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 use strict;
 use File::Basename qw(dirname);
+use File::Path qw(make_path);
 
 sub repos {
     my @repos = split(/\0/, `find  -name '.git' -print0 -prune -o -name '.repo' -prune -o -path './out' -prune`);
