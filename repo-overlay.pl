@@ -174,10 +174,14 @@ for my $repo (sort(repos())) {
 
     for my $file (@links) {
 	warn "link $file";
-	my $dirname = dirname($repo.$file);
-	if ($dirchanged{$dirname}) {
+	my $dirname = dirname($file);
+	next unless $dirchanged{$repo . $dirname};
+	my $status = $status{$repo . $file};
+	if (!defined($status)) {
 	    nsystem("ln -sv `(cd $pwd/$repo; git cat-file blob HEAD:'$file')` import/'$repo$file'") or die;
 	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'") or die;
+	} else {
+	    die "unknown status $status for $repo$file";
 	}
     }
     
