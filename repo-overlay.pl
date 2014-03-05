@@ -28,12 +28,12 @@ REPO:
 # all ancestor directories of a path
 sub prefixes {
     my ($path) = @_;
-
     my @components = split(/\//, $path);
-
     my @res;
-    for my $i (-1 .. (scalar(@components)-1)) {
-	push @res, join("/", @components[0..$i]);
+
+    while ($path ne ".") {
+	push @res, $path;
+	$path = basename($path);
     }
 
     return @res;
