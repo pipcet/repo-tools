@@ -103,8 +103,17 @@ for my $repo (sort(repos())) {
     for my $p (@porc) {
 	my $status = $status{$repo . $p->{path}} = $p->{a} . $p->{b};
 
+	if ($status eq "??" and $p->{path} =~ /\/$/) {
+	    my @extra = split(/\0/, `find -name '.git' -prune -o -print0`);
+
+	    for my $extra (@extra) {
+		$status{$repo . $p->{path}} = "??";
+	    }
+	}
+
 	if ($status eq "??" or
-	    $status eq " M") {
+	    $status eq " M" or
+	    $status eq " D") {
 	    for my $pref (prefixes($repo . $p->{path})) {
 		$dirchanged{$pref} = 1;
 	    }
@@ -148,6 +157,7 @@ for my $repo (sort(repos())) {
 		    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
 		    nsystem("mkdir -p '$outdir/export/$dirname'") or die;
 		}
+
 		nsystem("ln -vnsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
 		nsystem("ln -vnsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
 	    }
@@ -169,6 +179,8 @@ for my $repo (sort(repos())) {
 	} elsif ($status eq " M") {
 	    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
 	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'")
+	} elsif ($status eq " D") {
+	    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
 	} else {
 	    die "unknown status $status for $repo$file";
 	}
