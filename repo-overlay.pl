@@ -204,6 +204,9 @@ for my $repo (sort(repos())) {
     chdir($pwd);
 }
 
+nsystem("cp $pwd/README.md $outdir/import/");
+nsystem("cp $pwd/README.md $outdir/export/");
+
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
 nsystem("ln -sv $pwd $outdir/repo-overlay");
