@@ -33,7 +33,7 @@ sub prefixes {
 
     while ($path ne ".") {
 	push @res, $path;
-	$path = basename($path);
+	$path = dirname($path);
     }
 
     return @res;
