@@ -1,4 +1,7 @@
 #!/usr/bin/perl
+use strict;
+use File::Basename qw(dirname);
+
 sub repos {
     my @repos = split(/\0/, `find  -name '.git' -print0 -prune -o -name '.repo' -prune -o -path './out' -prune`);
 #pop(@repos);
@@ -143,8 +146,7 @@ for my $repo (sort(repos())) {
 
     for my $file (@files) {
 	#warn "file $file";
-	my $dirname = `dirname '$file'`;
-	chomp($dirname);
+	my $dirname = dirname($file);
 	next unless $dirchanged{$repo . $dirname};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
@@ -162,8 +164,7 @@ for my $repo (sort(repos())) {
 
     for my $file (@links) {
 	warn "link $file";
-	my $dirname = `dirname '$repo.$file'`;
-	chomp($dirname);	   
+	my $dirname = dirname($repo.$file);
 	if ($dirchanged{$dirname}) {
 	    nsystem("ln -sv `(cd $pwd/$repo; git cat-file blob HEAD:'$file')` import/'$repo$file'") or die;
 	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'") or die;
