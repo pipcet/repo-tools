@@ -158,13 +158,15 @@ for my $repo (sort(repos())) {
     for my $file (@files) {
 	#warn "file $file";
 	my $dirname = dirname($file);
-	next unless $dirchanged{$repo . $dirname};
+	my $fullpath = $repo . $dirname;
+	$fullpath =~ s/\/\.$//;
+	next unless $dirchanged{$fullpath};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' import/'$repo$file'") or die;
 	    nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' export/'$repo$file'") or die;
 	} elsif ($status eq "??") {
-	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'")
+	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'") or die;
 	} elsif ($status eq " M") {
 	    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
 	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'")
@@ -176,7 +178,9 @@ for my $repo (sort(repos())) {
     for my $file (@links) {
 	warn "link $file";
 	my $dirname = dirname($file);
-	next unless $dirchanged{$repo . $dirname};
+	my $fullpath = $repo . $dirname;
+	$fullpath =~ s/\/\.$//;
+	next unless $dirchanged{$fullpath};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    nsystem("ln -sv `(cd $pwd/$repo; git cat-file blob HEAD:'$file')` import/'$repo$file'") or die;
