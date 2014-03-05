@@ -8,6 +8,9 @@ sub repos {
     map { chomp; s/\.git$//; } @repos;
     map { s/^\.\///; } @repos;
 
+    # we currently fail horribly if there are actual changes in nested
+    # git repositories. On the android repo, that affects only
+    # chromium_org/, which I'm not touching, for now.
     my %have;
 REPO:
     for my $repo (@repos) {
