@@ -18,12 +18,13 @@ REPO:
 	    warn "$repo nested in $prefix" if ($have{$prefix."/"});
 	    next REPO if ($have{$prefix."/"});
 	}
-	$have{$repo} = 1
+	$have{$repo} = 1;
     }
     
     return grep { $have{$_} } @repos;
 }
 
+# all ancestor directories of a path
 sub prefixes {
     my ($path) = @_;
 
@@ -53,10 +54,16 @@ nsystem("rm -rf $outdir/import/*");
 nsystem("rm -rf $outdir/export/*");
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
 
+my %version;
+my %rversion;
+
 my $fh;
 open $fh, "<$outdir/versions/versions.txt" or die;
 while (<$fh>) {
     chomp;
+
+    my $path;
+    my $head;
 
     if (($path, $head) = /^(.*): (.*)$/) {
 	$version{$path} = $head;
