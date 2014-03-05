@@ -89,7 +89,7 @@ for my $repo (sort(repos())) {
     if (!defined($rversion{$head})) {
 	print $fh "$repo: $head\n";
     } elsif ($version{$rversion{$head}} ne $head) {
-	die "version mismatch"
+	die "version mismatch";
     }
     
     my @porc_lines = split(/\0/, `git status -z`);
