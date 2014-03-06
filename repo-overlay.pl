@@ -2,6 +2,7 @@
 use strict;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
+use Getopt::Long;
 
 sub repos {
     my @repos = split(/\0/, `find  -name '.git' -print0 -prune -o -name '.repo' -prune -o -path './out' -prune`);
@@ -48,19 +49,24 @@ sub nsystem {
     return !system($cmd);
 }
 
-my $hardlink = 1;
-
+my $do_hardlink;
 sub copy_or_hardlink {
     my ($src, $dst) = @_;
 
-    my $hl = $hardlink ? "l" : "";
+    my $hl = $do_hardlink ? "l" : "a";
 
-    return nsystem("cp -av$hl '$src' '$dst'") or die;
+    return nsystem("cp -v$hl '$src' '$dst'") or die;
 }
     
+my $outdir;
+
+GetOptions(
+    "hardlink!" => \$do_hardlink,
+    "out=s" => \$outdir,
+    );
+
 my $pwd = `pwd`;
 chomp($pwd);
-my $outdir = "/home/pip/tmp-repo-overlay/";
 nsystem("rm -rf $outdir/import/*");
 nsystem("rm -rf $outdir/export/*");
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
