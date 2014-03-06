@@ -254,3 +254,4 @@ nsystem("ln -sv $pwd $outdir/repo-overlay");
 # useful commands:
 #  repo-overlay.pl -- sync repository to export/ import/
 #  diff -ur repo-overlay/ export/|(cd repo-overlay; patch -p1) -- sync export/ to repository (doesn't handle new/deleted files)
+#  diff -urNx .git -x .repo -x out -x out-old repo-overlay/ export/|(cd repo-overlay; patch -p1)
