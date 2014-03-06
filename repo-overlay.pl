@@ -146,6 +146,7 @@ for my $repo (sort(repos())) {
     @links = grep {$_ ne ""} @links;
 
     map { warn "spaces in $_" if $_ =~ / /; } (@files,@dirs,@links);
+    map { die "single quote in $_" if $_ =~ /\'/; } (@files,@dirs,@links);
     
     chdir($outdir);
     
