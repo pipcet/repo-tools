@@ -70,6 +70,9 @@ GetOptions(
     "in=s" => \$indir,
     );
 
+$outdir =~ s/\/*$//;
+$indir =~ s/\/*$//;
+
 chdir($indir) or die;
 
 my $pwd = `pwd`;
@@ -103,16 +106,11 @@ nsystem("rm $outdir/repo-overlay");
 
 my %dirchanged;
 $dirchanged{"."} = 1;
+my %status;
 
 my @repos = repos();
 for my $repo (@repos) {
-    my $noslash = $repo;
-    $noslash =~ s/\/$//;
-    $dirchanged{$noslash} = 1;
-    $dirchanged{dirname($repo)} = 1;
-}
-for my $repo (@repos) {
-    warn "repo $repo";
+    chdir($pwd);
     chdir($repo);
     my $head = `git rev-parse HEAD`;
     chomp($head);
@@ -127,9 +125,6 @@ for my $repo (@repos) {
 
     my @porc = map { /^(.)(.) (.*)$/; { a => $1, b => $2, path => $3 } } @porc_lines;
     
-    print "repo $repo head $head " . scalar(@porc) . "\n";
-
-    my %status;
     for my $p (@porc) {
 	my $path = $p->{path};
 	my $status = $status{$repo . $path} = $p->{a} . $p->{b};
@@ -141,7 +136,6 @@ for my $repo (@repos) {
 	    for my $extra (@extra) {
 		$status{$repo . $extra} = "??";
 		for my $pref (prefixes($repo . $extra)) {
-		    warn "dirchanged $pref";
 		    $dirchanged{$pref} = 1;
 		}
 	    }
@@ -160,7 +154,8 @@ for my $repo (@repos) {
 	    die "unknown status $status in repo $repo, path " . $p->{path};
 	}
     }
-
+}
+for my $repo (@repos) {
     chdir($pwd);
     my @dirs = split(/\0/, `find '$repo' -name '.git' -prune -o -type d -print0`);
     chdir($repo);
@@ -187,7 +182,7 @@ for my $repo (@repos) {
     for my $dir (@dirs) {
 	my $status = $status{$dir};
 	die if $dir eq ".";
-	for (my $dirname = $dir; $dirname ne "."; ($dir, $dirname) = ($dirname, dirname($dirname))) {
+	for (my $dirname = $dir; ; ($dir, $dirname) = ($dirname, dirname($dirname))) {
 	    if ($dirchanged{$dirname}) {
 		if ($status{$dirname} ne "??" and ! -d "import/$dirname") {
 		    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
