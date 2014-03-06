@@ -2,7 +2,7 @@
 use strict;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
-use Getopt::Long;
+use Getopt::Long qw(:config auto_version auto_help);
 
 sub repos {
     my @repos = split(/\0/, `find  -name '.git' -print0 -prune -o -name '.repo' -prune -o -path './out' -prune`);
@@ -59,11 +59,15 @@ sub copy_or_hardlink {
 }
     
 my $outdir;
+my $indir = ".";
 
 GetOptions(
     "hardlink!" => \$do_hardlink,
     "out=s" => \$outdir,
+    "in=s" => \$indir,
     );
+
+chdir($indir) or die;
 
 my $pwd = `pwd`;
 chomp($pwd);
