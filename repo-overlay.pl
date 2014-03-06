@@ -126,6 +126,7 @@ for my $repo (sort(repos())) {
 
 	if ($status eq "??" and $path =~ /\/$/) {
 	    my @extra = split(/\0/, `find $path -name '.git' -prune -o -print0`);
+	    map { s/\/*$//; } @extra;
 
 	    for my $extra (@extra) {
 		$status{$repo . $extra} = "??";
@@ -135,6 +136,9 @@ for my $repo (sort(repos())) {
 		}
 	    }
 	}
+
+	$path =~ s/\/$//;
+	$status{$repo . $path} = $status;
 
 	if ($status eq "??" or
 	    $status eq " M" or
@@ -171,16 +175,23 @@ for my $repo (sort(repos())) {
     chdir($outdir);
     
     for my $dir (@dirs) {
-	#warn "dir $dir";
+	my $status = $status{$dir};
+	warn "dir $dir status $status";
 	die if $dir eq ".";
 	if ($dirchanged{$dir}) {
-	    nsystem("mkdir -p import/'$dir'") or die;
-	    nsystem("mkdir -p export/'$dir'") or die;
+	    if ($status ne "??") {
+		nsystem("mkdir -p import/'$dir'") or die;
+	    }
+	    if ($status ne " D") {
+		nsystem("mkdir -p export/'$dir'") or die;
+	    }
 	} else {
 	    my $dirname = dirname($dir);
 	    if ($dirchanged{$dirname}) {
-		if ($dirname ne  ".") {
+		if ($dirname ne  "." and $status ne "??") {
 		    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
+		}
+		if ($dirname ne  "." and $status ne " D") {
 		    nsystem("mkdir -p '$outdir/export/$dirname'") or die;
 		}
 
