@@ -1,0 +1,3 @@
+#!/bin/sh
+
+git log -p -1 HEAD | (cd ../repo-overlay; patch -p1)
