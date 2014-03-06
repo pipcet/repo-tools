@@ -249,3 +249,7 @@ copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
 nsystem("ln -sv $pwd $outdir/repo-overlay");
+
+# useful commands:
+#  repo-overlay.pl -- sync repository to export/ import/
+#  diff -ur repo-overlay/ export/|(cd repo-overlay; patch -p1) -- sync export/ to repository (doesn't handle new/deleted files)
