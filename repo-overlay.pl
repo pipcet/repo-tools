@@ -101,20 +101,25 @@ for my $repo (sort(repos())) {
 
     my %status;
     for my $p (@porc) {
-	my $status = $status{$repo . $p->{path}} = $p->{a} . $p->{b};
+	my $path = $p->{path};
+	my $status = $status{$repo . $path} = $p->{a} . $p->{b};
 
-	if ($status eq "??" and $p->{path} =~ /\/$/) {
-	    my @extra = split(/\0/, `find -name '.git' -prune -o -print0`);
+	if ($status eq "??" and $path =~ /\/$/) {
+	    my @extra = split(/\0/, `find $path -name '.git' -prune -o -print0`);
 
 	    for my $extra (@extra) {
-		$status{$repo . $p->{path}} = "??";
+		$status{$repo . $extra} = "??";
+		for my $pref (prefixes($repo . $extra)) {
+		    warn "dirchanged $pref";
+		    $dirchanged{$pref} = 1;
+		}
 	    }
 	}
 
 	if ($status eq "??" or
 	    $status eq " M" or
 	    $status eq " D") {
-	    for my $pref (prefixes($repo . $p->{path})) {
+	    for my $pref (prefixes($repo . $path)) {
 		$dirchanged{$pref} = 1;
 	    }
 	} else {
