@@ -14,13 +14,16 @@ sub repos {
     # git repositories. On the android repo, that affects only
     # chromium_org/, which I'm not touching, for now.
     my %have;
+    for my $repo (@repos) {
+	$have{$repo} = 1;
+    }
+
 REPO:
     for my $repo (@repos) {
 	for my $prefix (prefixes($repo)) {
 	    warn "$repo nested in $prefix" if ($have{$prefix."/"});
-	    next REPO if ($have{$prefix."/"});
+	    delete($have{$repo}) if ($have{$prefix."/"});
 	}
-	$have{$repo} = 1;
     }
     
     return grep { $have{$_} } @repos;
@@ -53,7 +56,7 @@ my $do_hardlink;
 sub copy_or_hardlink {
     my ($src, $dst) = @_;
 
-    my $hl = $do_hardlink ? "l" : "a";
+    my $hl = $do_hardlink ? "al" : "a";
 
     return nsystem("cp -v$hl '$src' '$dst'") or die;
 }
@@ -101,7 +104,14 @@ nsystem("rm $outdir/repo-overlay");
 my %dirchanged;
 $dirchanged{"."} = 1;
 
-for my $repo (sort(repos())) {
+my @repos = repos();
+for my $repo (@repos) {
+    my $noslash = $repo;
+    $noslash =~ s/\/$//;
+    $dirchanged{$noslash} = 1;
+    $dirchanged{dirname($repo)} = 1;
+}
+for my $repo (@repos) {
     warn "repo $repo";
     chdir($repo);
     my $head = `git rev-parse HEAD`;
@@ -176,27 +186,23 @@ for my $repo (sort(repos())) {
     
     for my $dir (@dirs) {
 	my $status = $status{$dir};
-	warn "dir $dir status $status";
 	die if $dir eq ".";
-	if ($dirchanged{$dir}) {
-	    if ($status ne "??") {
-		nsystem("mkdir -p import/'$dir'") or die;
-	    }
-	    if ($status ne " D") {
-		nsystem("mkdir -p export/'$dir'") or die;
-	    }
-	} else {
-	    my $dirname = dirname($dir);
+	for (my $dirname = $dir; $dirname ne "."; ($dir, $dirname) = ($dirname, dirname($dirname))) {
 	    if ($dirchanged{$dirname}) {
-		if ($dirname ne  "." and $status ne "??") {
+		if ($status{$dirname} ne "??" and ! -d "import/$dirname") {
 		    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
 		}
-		if ($dirname ne  "." and $status ne " D") {
+		if ($status{$dirname} ne " D" and ! -d "export/$dirname") {
 		    nsystem("mkdir -p '$outdir/export/$dirname'") or die;
 		}
 
-		nsystem("ln -vnsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
-		nsystem("ln -vnsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
+		if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
+		    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
+		}
+		if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
+		    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
+		}
+		last;
 	    }
 	}
     }
