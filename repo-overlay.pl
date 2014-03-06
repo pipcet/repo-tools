@@ -47,6 +47,16 @@ sub nsystem {
 
     return !system($cmd);
 }
+
+my $hardlink = 1;
+
+sub copy_or_hardlink {
+    my ($src, $dst) = @_;
+
+    my $hl = $hardlink ? "l" : "";
+
+    return nsystem("cp -av$hl '$src' '$dst'") or die;
+}
     
 my $pwd = `pwd`;
 chomp($pwd);
@@ -181,10 +191,10 @@ for my $repo (sort(repos())) {
 	    nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' import/'$repo$file'") or die;
 	    nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' export/'$repo$file'") or die;
 	} elsif ($status eq "??") {
-	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'") or die;
+	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq " M") {
 	    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
-	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'")
+	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq " D") {
 	    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
 	} else {
@@ -201,7 +211,9 @@ for my $repo (sort(repos())) {
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    nsystem("ln -sv `(cd $pwd/$repo; git cat-file blob HEAD:'$file')` import/'$repo$file'") or die;
-	    nsystem("cp -av '$pwd/$repo$file' export/'$repo$file'") or die;
+	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	} elsif ($status eq "??") {
+	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} else {
 	    die "unknown status $status for $repo$file";
 	}
@@ -210,8 +222,8 @@ for my $repo (sort(repos())) {
     chdir($pwd);
 }
 
-nsystem("cp $pwd/README.md $outdir/import/");
-nsystem("cp $pwd/README.md $outdir/export/");
+copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
+copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
 
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
