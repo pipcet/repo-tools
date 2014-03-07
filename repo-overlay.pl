@@ -294,7 +294,7 @@ for my $repo (@repos) {
 	    next unless $dirchanged{$fullpath};
 	    my $status = $status{$repo . $file};
 	    if (!defined($status)) {
-		symlink_absolute(`(cd $pwd/$repo; git cat-file blob HEAD:'$file')`, "import/'$repo$file") or die;
+		symlink_absolute(`(cd $pwd/$repo; git cat-file blob HEAD:'$file')`, "import/$repo$file") or die;
 		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	    } elsif ($status eq "??") {
 		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
