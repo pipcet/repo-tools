@@ -91,7 +91,8 @@ sub copy_or_hardlink {
 
     return nsystem("cp -v$hl '$src' '$dst'") or die;
 }
-    
+
+
 my $outdir;
 my $indir = ".";
 
@@ -108,6 +109,16 @@ chdir($indir) or die;
 
 my $pwd = `pwd`;
 chomp($pwd);
+
+
+sub cat_file {
+    my ($repo, $file, $dst) = @_;
+
+    mkdirp(dirname($dst)) or die;
+
+    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > $dst") or die;
+}
+
 nsystem("rm -rf $outdir/import/*");
 nsystem("rm -rf $outdir/export/*");
 nsystem("rm -rf $outdir/import/.repo");
@@ -190,6 +201,20 @@ for my $repo (@repos) {
 }
 
 my %items;
+sub store_item {
+    my ($item) = @_;
+
+    my $olditem = $items{$item->{abs}};
+
+    if ($olditem) {
+	if (length($olditem->{repo}) > length($item->{repo})) {
+	    warn "nested item in " . $item->{repo} . " and " . $olditem->{repo};
+	    return;
+	}
+    }
+
+    $items{$item->{abs}} = $item;
+}
 
 for my $repo (@repos) {
     my @items;
@@ -221,8 +246,7 @@ for my $repo (@repos) {
 	my $relpath = substr($abspath, length($repo));
 	my $type = "dir";
 
-	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
-	$items{$abspath} = { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
+	store_item({ abs => $abspath, rel => $relpath, repo => $repo, type => $type });
     }
 
     for my $file (@files) {
@@ -231,8 +255,7 @@ for my $repo (@repos) {
 	my $relpath = substr($abspath, length($repo));
 	my $type = "file";
 
-	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
-	$items{$abspath} = { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
+	store_item({ abs => $abspath, rel => $relpath, repo => $repo, type => $type });
     }
 
     for my $file (@links) {
@@ -241,16 +264,19 @@ for my $repo (@repos) {
 	my $relpath = substr($abspath, length($repo));
 	my $type = "link";
 
-	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
-	$items{$abspath} = { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
+	store_item({ abs => $abspath, rel => $relpath, repo => $repo, type => $type });
     }
 
     chdir($outdir);
+}
 
-    for my $item (@items) {
+    chdir($outdir);
+
+    for my $item (values %items) {
 	my $abs = $item->{abs};
 	my $rel = $item->{rel};
 	my $type = $item->{type};
+	my $repo = $item->{repo};
 
         if ($type eq "dir") {
 	    my $dir = $abs;
@@ -284,10 +310,10 @@ for my $repo (@repos) {
 	    } elsif ($status eq "??") {
 		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	    } elsif ($status eq " M") {
-		nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
+		cat_file($repo, $file, "import/$repo$file");
 		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	    } elsif ($status eq " D") {
-		nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
+		cat_file($repo, $file, "import/$repo$file");
 	    } else {
 		die "unknown status $status for $repo$file";
 	    }
@@ -311,7 +337,6 @@ for my $repo (@repos) {
     }
     
     chdir($pwd);
-}
 
 copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
 copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
