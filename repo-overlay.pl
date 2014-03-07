@@ -128,9 +128,9 @@ nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
 my %version;
 my %rversion;
 
-my $fh;
-open $fh, "<$outdir/versions/versions.txt" or die;
-while (<$fh>) {
+my $version_fh;
+open $version_fh, "<$outdir/versions/versions.txt" or die;
+while (<$version_fh>) {
     chomp;
 
     my $path;
@@ -141,9 +141,9 @@ while (<$fh>) {
 	$rversion{$head} = $path;
     }
 }
-close $fh;
+close $version_fh;
 
-open $fh, ">>$outdir/versions/versions.txt";
+open $version_fh, ">>$outdir/versions/versions.txt";
 
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay");
