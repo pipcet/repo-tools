@@ -200,7 +200,6 @@ for my $repo (@repos) {
 	if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
 	    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
 	}
-	last;
     }
 
     for my $file (@files) {
