@@ -257,11 +257,13 @@ for my $repo (@repos) {
 		($dir, $dirname) = ($dirname, dirname($dirname));
 	    }
 
-	    if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
-		symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
-	    }
-	    if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
-		symlink_relative("$outdir/repo-overlay/$dir", "export/$dir") or die;
+	    if (!$dirchanged{$dir}) {
+		if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
+		    symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
+		}
+		if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
+		    symlink_relative("$outdir/repo-overlay/$dir", "export/$dir") or die;
+		}
 	    }
 	} elsif ($type eq "file") {
 	    my $file = $rel;
