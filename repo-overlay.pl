@@ -35,7 +35,6 @@ REPO:
 # all ancestor directories of a path
 sub prefixes {
     my ($path) = @_;
-    my @components = split(/\//, $path);
     my @res;
 
     while ($path ne ".") {
@@ -43,6 +42,7 @@ sub prefixes {
 	$path = dirname($path);
     }
 
+    shift @res;
     return @res;
 }
 
@@ -245,7 +245,8 @@ for my $repo (@repos) {
 	    die "unknown mode";
 	}
 
-	for my $pref (prefixes{$m->{path}}) {
+	for my $pref (prefixes($m->{path})) {
+	    last if length($pref) < length($repo);
 	    store_item({oldtype=>"dir", abs=>$pref, repo=>$repo});
 	}
     }
