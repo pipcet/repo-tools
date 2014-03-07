@@ -226,20 +226,22 @@ for my $repo (@repos) {
 	}
     }
 
-    my @lstree_lines = split(/\0/, `git ls-tree -r HEAD -z`);
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
+    if (scalar(@porc)) {
+	my @lstree_lines = split(/\0/, `git ls-tree -r HEAD -z`);
+	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
-    for my $m (@modes) {
-	if ($m->{extmode} eq "120") {
-	    store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
-	} elsif ($m->{extmode} eq "100") {
-	    store_item({oldtype=>"file", abs=>$m->{path}, repo=>$repo});
-	} else {
-	    die "unknown mode";
-	}
+	for my $m (@modes) {
+	    if ($m->{extmode} eq "120") {
+		store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
+	    } elsif ($m->{extmode} eq "100") {
+		store_item({oldtype=>"file", abs=>$m->{path}, repo=>$repo});
+	    } else {
+		die "unknown mode";
+	    }
 
-	for my $pref (prefixes{$m->{path}}) {
-	    store_item({oldtype=>"dir", abs=>$m->{path}, repo=>$repo});
+	    for my $pref (prefixes{$m->{path}}) {
+		store_item({oldtype=>"dir", abs=>$m->{path}, repo=>$repo});
+	    }
 	}
     }
 }
@@ -257,25 +259,19 @@ for my $item (values %items) {
     } else {
 	die;
     }
-}
-for my $repo (@repos) {
-    my @items;
 
-    chdir($pwd);
-    my @other = split(/\0/, `find '$repo' -name '.git' -prune -o -not '(' -type d -o -type f -o -type l ')' -print0`);
-
-    chdir($repo);
-
-    die join(", ", @other) if scalar(@other);
+    $item->{oldtype} = $item->{newtype} unless defined($item->{oldtype});
 }
 
+chdir($outdir);
 for my $item (values %items) {
     my $abs = $item->{abs};
     my $rel = $item->{rel};
     my $type = $item->{newtype};
+    my $oldtype = $item->{oldtype};
     my $repo = $item->{repo};
 
-    if ($type eq "dir") {
+    if ($oldtype eq "dir") {
 	my $dir = $abs;
 
 	my $status = $status{$dir};
@@ -307,7 +303,7 @@ for my $item (values %items) {
 	    }
 	}
     }
-    if ($type eq "file") {
+    if ($oldtype eq "file") {
 	my $file = $rel;
 
 	my $dirname = dirname($file);
@@ -345,9 +341,9 @@ for my $item (values %items) {
 	    die "unknown status $status for $repo$file";
 	}
     }
-    if ($type eq "link") {
+    if ($oldtype eq "link") {
 	my $file = $rel;
-	warn "link $file";
+	warn "link $file $repo $abs";
 	my $dirname = dirname($file);
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
