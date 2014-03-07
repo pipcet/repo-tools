@@ -154,6 +154,29 @@ my %oldtype;
 my %newtype;
 my %status;
 
+my %items;
+
+sub store_item {
+    my ($item) = @_;
+
+    $item->{rel} = substr($item->{abs}, length($item->{repo}));
+
+    my $olditem = $items{$item->{abs}};
+
+    if ($olditem) {
+	if (length($olditem->{repo}) > length($item->{repo})) {
+	    warn "nested item in " . $item->{repo} . " and " . $olditem->{repo};
+	    return;
+	}
+
+	for my $key (keys %$item) {
+	    $olditem->{$key} = $item->{$key};
+	}
+    } else {
+	$items{$item->{abs}} = $item;
+    }
+}
+
 my @repos = repos();
 for my $repo (@repos) {
     chdir($pwd);
@@ -180,8 +203,7 @@ for my $repo (@repos) {
 	    map { s/\/*$//; } @extra;
 
 	    for my $extra (@extra) {
-		$status{$repo . $extra} = "??";
-		$oldtype{$repo . $extra} = "none";
+		store_item({abs=>$repo.$extra, oldtype=>"none", repo=>$repo, status=>"??"});
 		for my $pref (prefixes($repo . $extra)) {
 		    $dirchanged{$pref} = 1;
 		}
@@ -190,7 +212,8 @@ for my $repo (@repos) {
 
 	$path =~ s/\/$//;
 	$status{$repo . $path} = $status;
-	$oldtype{$repo . $extra} = "none" if $status eq "??";
+	$oldtype{$repo . $path} = "none" if $status eq "??";
+	store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"}) if $status eq "??";
 
 	if ($status eq "??" or
 	    $status eq " M" or
@@ -207,97 +230,49 @@ for my $repo (@repos) {
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
-	$extmode{$m->{path}} = $m->{extmode};
 	if ($m->{extmode} eq "120") {
-	    $oldtype{$m->{path}} = "link";
+	    store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
-	    $oldtype{$m->{path}} = "file";
+	    store_item({oldtype=>"file", abs=>$m->{path}, repo=>$repo});
 	} else {
 	    die "unknown mode";
 	}
 
 	for my $pref (prefixes{$m->{path}}) {
-	    $oldtype{$m->{path}} = "dir";
+	    store_item({oldtype=>"dir", abs=>$m->{path}, repo=>$repo});
 	}
     }
 }
 
-my %items;
-sub store_item {
-    my ($item) = @_;
-
-    my $olditem = $items{$item->{abs}};
-
-    if ($olditem) {
-	if (length($olditem->{repo}) > length($item->{repo})) {
-	    warn "nested item in " . $item->{repo} . " and " . $olditem->{repo};
-	    return;
-	}
+chdir($pwd);
+for my $item (values %items) {
+    if (-l $item->{abs}) {
+	$item->{newtype} = "link";
+    } elsif (!-e $item->{abs}) {
+	$item->{newtype} = "none";
+    } elsif (-d $item->{abs}) {
+	$item->{newtype} = "dir";
+    } elsif (-f $item->{abs}) {
+	$item->{newtype} = "file";
+    } else {
+	die;
     }
-
-    $items{$item->{abs}} = $item;
 }
-
 for my $repo (@repos) {
     my @items;
 
     chdir($pwd);
-    my @dirs = split(/\0/, `find '$repo' -name '.git' -prune -o -type d -print0`);
-    my @files = split(/\0/, `find '$repo' -name '.git' -prune -o -type f -print0`);
-    my @links = split(/\0/, `find '$repo' -name '.git' -prune -o -type l -print0`);
     my @other = split(/\0/, `find '$repo' -name '.git' -prune -o -not '(' -type d -o -type f -o -type l ')' -print0`);
 
     chdir($repo);
 
     die join(", ", @other) if scalar(@other);
-
-    map { s/^\.\///; } @files;
-    map { s/^\.\///; s/\/$//; } @dirs;
-    map { s/^\.\///; } @links;
-    
-    @files = grep {$_ ne ""} @files;
-    @dirs = grep {$_ ne ""} @dirs;
-    @links = grep {$_ ne ""} @links;
-
-    map { warn "spaces in $_" if $_ =~ / /; } (@files,@dirs,@links);
-    map { die "single quote in $_" if $_ =~ /\'/; } (@files,@dirs,@links);
-    
-    for my $file (@dirs) {
-	my $abspath = $file;
-	# potentially empty
-	my $relpath = substr($abspath, length($repo));
-	my $type = "dir";
-
-	store_item({ abs => $abspath, rel => $relpath, repo => $repo, type => $type });
-    }
-
-    for my $file (@files) {
-	my $abspath = $file;
-	die unless substr($abspath, 0, length($repo)) eq $repo;
-	my $relpath = substr($abspath, length($repo));
-	my $type = "file";
-
-	store_item({ abs => $abspath, rel => $relpath, repo => $repo, type => $type });
-    }
-
-    for my $file (@links) {
-	my $abspath = $file;
-	die unless substr($abspath, 0, length($repo)) eq $repo;
-	my $relpath = substr($abspath, length($repo));
-	my $type = "link";
-
-	store_item({ abs => $abspath, rel => $relpath, repo => $repo, type => $type });
-    }
-
-    chdir($outdir);
 }
-
-chdir($outdir);
 
 for my $item (values %items) {
     my $abs = $item->{abs};
     my $rel = $item->{rel};
-    my $type = $item->{type};
+    my $type = $item->{newtype};
     my $repo = $item->{repo};
 
     if ($type eq "dir") {
