@@ -191,6 +191,17 @@ sub previous_commit {
     }
 }
 
+sub revparse {
+    my ($head) = @_;
+    my $last = `git rev-parse '$head'`;
+    chomp($last);
+    if ($last =~ /~1$/) {
+	return undef;
+    } else {
+	return $last;
+    }
+}
+
 my @repos = repos();
 for my $repo (@repos) {
     chdir($pwd);
