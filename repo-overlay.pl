@@ -182,24 +182,25 @@ for my $repo (@repos) {
     for my $dir (@dirs) {
 	my $status = $status{$dir};
 	die if $dir eq ".";
-	for (my $dirname = $dir; ; ($dir, $dirname) = ($dirname, dirname($dirname))) {
-	    if ($dirchanged{$dirname}) {
-		if ($status{$dirname} ne "??" and ! -d "import/$dirname") {
-		    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
-		}
-		if ($status{$dirname} ne " D" and ! -d "export/$dirname") {
-		    nsystem("mkdir -p '$outdir/export/$dirname'") or die;
-		}
-
-		if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
-		    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
-		}
-		if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
-		    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
-		}
-		last;
-	    }
+	my $dirname = $dir;
+	while(!$dirchanged{$dirname}) {
+	    ($dir, $dirname) = ($dirname, dirname($dirname));
 	}
+
+	if ($status{$dirname} ne "??" and ! -d "import/$dirname") {
+	    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
+	}
+	if ($status{$dirname} ne " D" and ! -d "export/$dirname") {
+	    nsystem("mkdir -p '$outdir/export/$dirname'") or die;
+	}
+
+	if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
+	    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
+	}
+	if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
+	    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
+	}
+	last;
     }
 
     for my $file (@files) {
