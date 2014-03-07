@@ -208,6 +208,7 @@ for my $repo (@repos) {
 	    map { s/\/*$//; } @extra;
 
 	    for my $extra (@extra) {
+		$status{$repo.$extra} = "??";
 		store_item({abs=>$repo.$extra, oldtype=>"none", repo=>$repo, status=>"??"});
 		for my $pref (prefixes($repo . $extra)) {
 		    $dirchanged{$pref} = 1;
