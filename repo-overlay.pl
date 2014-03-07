@@ -66,17 +66,23 @@ sub mkdirp {
 sub symlink_relative {
     my ($src, $dst) = @_;
 
+    mkdirp(dirname($dst)) or die;
+
     nsystem("ln -nsrv '$src' '$dst'") or die;
 }
 
 sub symlink_absolute {
     my ($src, $dst) = @_;
 
+    mkdirp(dirname($dst)) or die;
+
     nsystem("ln -sv '$src' '$dst'") or die;
 }
 
 sub copy_or_hardlink {
     my ($src, $dst) = @_;
+
+    mkdirp(dirname($dst)) or die;
 
     my $hl = $do_hardlink ? "al" : "a";
 
