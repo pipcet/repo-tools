@@ -439,6 +439,9 @@ chdir($pwd);
 
 copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
 copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
+copy_or_hardlink("$pwd/Makefile", "$outdir/import/") or die;
+copy_or_hardlink("$pwd/Makefile", "$outdir/export/") or die;
+copy_or_hardlink("$outdir/versions/versions.txt", "$outdir/import/") or die;
 
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
