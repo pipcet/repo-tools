@@ -156,6 +156,8 @@ for my $repo (@repos) {
     }
 }
 
+my %items;
+
 for my $repo (@repos) {
     my @items;
 
@@ -187,6 +189,7 @@ for my $repo (@repos) {
 	my $type = "dir";
 
 	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
+	$items{$abspath} = { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
     }
 
     for my $file (@files) {
@@ -196,6 +199,7 @@ for my $repo (@repos) {
 	my $type = "file";
 
 	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
+	$items{$abspath} = { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
     }
 
     for my $file (@links) {
@@ -205,6 +209,7 @@ for my $repo (@repos) {
 	my $type = "link";
 
 	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
+	$items{$abspath} = { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
     }
 
     chdir($outdir);
