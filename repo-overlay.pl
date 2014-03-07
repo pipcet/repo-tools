@@ -184,7 +184,11 @@ sub previous_commit {
     my ($head) = @_;
     my $last = `git rev-parse '$head~1'`;
     chomp($last);
-    return $last;
+    if ($last =~ /~1$/) {
+	return undef;
+    } else {
+	return $last;
+    }
 }
 
 my @repos = repos();
@@ -201,18 +205,27 @@ for my $repo (@repos) {
 	die "version mismatch";
     }
     if (1) {
+	my $branch = "dirty"; chomp($branch); # XXX
+	my $remote = `git config --get branch.$branch.remote`; chomp($remote);
+	my $url = `git config --get remote.$remote.url`; chomp($url);
+	warn "$repo $branch $remote $url";
 	my @heads;
 	my @commits;
-	for (my $h = $head; $h ne $version{$repo}; $h = previous_commit($h)) {
+	for (my $h = $head; defined($h) and $h ne $version{$repo}; $h = previous_commit($h)) {
 	    last if $#heads>10;
 	    last if $h =~ /\~1$/;
 	    push @heads, $h;
-	    push @commits, (("" . +`git log --date=iso $h $h'^'`),);
+	    my $commit = `git log --date=iso $h $h'^'`;
+	    if ($url =~ m|^(https?\|git)://(github.com/.*)$|) {
+		$commit = "http://$2/commit/$h\n\n" . $commit;
+	    }
+	    push @commits, $commit;
 	}
 	my $first = $heads[$#heads];
 
 	if (scalar(@commits)) {
 	    my $cmsg = "merged commits in $repo:\n\n";
+	    $cmsg .= "see $url\n\n";
 	    $cmsg .= join("\n\n", @commits);
 
 	    my $cmsg_fh;
@@ -221,6 +234,7 @@ for my $repo (@repos) {
 	    close $cmsg_fh;
 	}
     }
+
     store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
     
     my @porc_lines = split(/\0/, `git status -z`);
