@@ -231,22 +231,22 @@ for my $repo (@repos) {
 	}
     }
 
-    if (scalar(@porc)) {
-	my @lstree_lines = split(/\0/, `git ls-tree -r HEAD -z`);
-	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
+    next unless scalar(@porc);
 
-	for my $m (@modes) {
-	    if ($m->{extmode} eq "120") {
-		store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
-	    } elsif ($m->{extmode} eq "100") {
-		store_item({oldtype=>"file", abs=>$m->{path}, repo=>$repo});
-	    } else {
-		die "unknown mode";
-	    }
+    my @lstree_lines = split(/\0/, `git ls-tree -r HEAD -z`);
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
-	    for my $pref (prefixes{$m->{path}}) {
-		store_item({oldtype=>"dir", abs=>$m->{path}, repo=>$repo});
-	    }
+    for my $m (@modes) {
+	if ($m->{extmode} eq "120") {
+	    store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
+	} elsif ($m->{extmode} eq "100") {
+	    store_item({oldtype=>"file", abs=>$m->{path}, repo=>$repo});
+	} else {
+	    die "unknown mode";
+	}
+
+	for my $pref (prefixes{$m->{path}}) {
+	    store_item({oldtype=>"dir", abs=>$pref, repo=>$repo});
 	}
     }
 }
