@@ -215,19 +215,22 @@ for my $repo (@repos) {
     } elsif ($version{$rversion{$head}} ne $head) {
 	die "version mismatch";
     }
-    if (1) {
+    if (0) {
 	my $branch = "dirty"; chomp($branch); # XXX
 	my $remote = `git config --get branch.$branch.remote`; chomp($remote);
 	my $url = `git config --get remote.$remote.url`; chomp($url);
 	warn "$repo $branch $remote $url";
 	my @heads;
 	my @commits;
-	for (my $h = $head; defined($h) and $h ne $version{$repo}; $h = previous_commit($h)) {
+	for (my $i = 0; ; $i++) {
+	    my $h = revparse("\@{$i}");
+	    last unless $h;
+	    last if $h eq $version{$repo};
 	    last if $#heads>10;
 	    last if $h =~ /\~1$/;
 	    push @heads, $h;
 	    my $commit = `git log --date=iso $h $h'^'`;
-	    if ($url =~ m|^(https?\|git)://(github.com/.*)$|) {
+	    if ($url =~ /^(https?|git):\/\/(github.com\/.*)$/) {
 		$commit = "http://$2/commit/$h\n\n" . $commit;
 	    }
 	    push @commits, $commit;
