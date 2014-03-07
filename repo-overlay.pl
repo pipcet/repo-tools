@@ -168,7 +168,7 @@ sub store_item {
 
     if ($olditem) {
 	if (length($olditem->{repo}) > length($item->{repo})) {
-	    warn "nested item in " . $item->{repo} . " and " . $olditem->{repo};
+	    warn "nested item ". $item->{abs}." in " . $item->{repo} . " and " . $olditem->{repo};
 	    return;
 	}
 
