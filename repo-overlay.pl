@@ -279,7 +279,6 @@ for my $item (values %items) {
     if ($oldtype eq "dir") {
 	my $dir = $abs;
 
-	my $status = $status{$dir};
 	die if $dir eq ".";
 	my $dirname = $dir;
 	while(!$dirchanged{$dirname}) {
@@ -287,7 +286,7 @@ for my $item (values %items) {
 	}
 
 	if (!$dirchanged{$dir}) {
-	    if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
+	    if (! (-e "import/$dir" || -l "import/$dir")) {
 		symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
 	    }
 	}
@@ -295,7 +294,6 @@ for my $item (values %items) {
     if ($type eq "dir") {
 	my $dir = $abs;
 
-	my $status = $status{$dir};
 	die if $dir eq ".";
 	my $dirname = $dir;
 	while(!$dirchanged{$dirname}) {
@@ -303,7 +301,7 @@ for my $item (values %items) {
 	}
 
 	if (!$dirchanged{$dir}) {
-	    if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
+	    if (! (-e "export/$dir" || -l "export/$dir")) {
 		symlink_relative("$outdir/repo-overlay/$dir", "export/$dir") or die;
 	    }
 	}
