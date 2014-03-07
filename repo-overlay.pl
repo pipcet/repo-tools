@@ -180,6 +180,13 @@ sub store_item {
     }
 }
 
+sub previous_commit {
+    my ($head) = @_;
+    my $last = `git rev-parse '$head~1'`;
+    chomp($last);
+    return $last;
+}
+
 my @repos = repos();
 for my $repo (@repos) {
     chdir($pwd);
@@ -187,12 +194,33 @@ for my $repo (@repos) {
     my $head = `git rev-parse HEAD`;
     chomp($head);
 
-    if (!defined($rversion{$head})) {
-	print $fh "$repo: $head\n";
+    if (!defined($rversion{$head}) or
+	$head ne $version{$repo}) {
+	print $version_fh "$repo: $head\n";
     } elsif ($version{$rversion{$head}} ne $head) {
 	die "version mismatch";
     }
+    if (1) {
+	my @heads;
+	my @commits;
+	for (my $h = $head; $h ne $version{$repo}; $h = previous_commit($h)) {
+	    last if $#heads>10;
+	    last if $h =~ /\~1$/;
+	    push @heads, $h;
+	    push @commits, (("" . +`git log --date=iso $h $h'^'`),);
+	}
+	my $first = $heads[$#heads];
 
+	if (scalar(@commits)) {
+	    my $cmsg = "merged commits in $repo:\n\n";
+	    $cmsg .= join("\n\n", @commits);
+
+	    my $cmsg_fh;
+	    open $cmsg_fh, ">>$outdir/versions/cmsg/$first..$head";
+	    print $cmsg_fh $cmsg;
+	    close $cmsg_fh;
+	}
+    }
     store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
     
     my @porc_lines = split(/\0/, `git status -z`);
