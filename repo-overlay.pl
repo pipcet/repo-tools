@@ -292,11 +292,25 @@ for my $item (values %items) {
 	    if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
 		symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
 	    }
+	}
+    }
+    if ($type eq "dir") {
+	my $dir = $abs;
+
+	my $status = $status{$dir};
+	die if $dir eq ".";
+	my $dirname = $dir;
+	while(!$dirchanged{$dirname}) {
+	    ($dir, $dirname) = ($dirname, dirname($dirname));
+	}
+
+	if (!$dirchanged{$dir}) {
 	    if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
 		symlink_relative("$outdir/repo-overlay/$dir", "export/$dir") or die;
 	    }
 	}
-    } elsif ($type eq "file") {
+    }
+    if ($type eq "file") {
 	my $file = $rel;
 
 	my $dirname = dirname($file);
@@ -306,18 +320,35 @@ for my $item (values %items) {
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
-	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq "??") {
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq " M") {
 	    cat_file($repo, $file, "import/$repo$file");
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq " D") {
 	    cat_file($repo, $file, "import/$repo$file");
 	} else {
 	    die "unknown status $status for $repo$file";
 	}
-    } elsif ($type eq "link") {
+    }
+    if ($type eq "file") {
+	my $file = $rel;
+
+	my $dirname = dirname($file);
+	my $fullpath = $repo . $dirname;
+	$fullpath =~ s/\/\.$//;
+	next unless $dirchanged{$fullpath};
+	my $status = $status{$repo . $file};
+	if (!defined($status)) {
+	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
+	} elsif ($status eq "??") {
+	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	} elsif ($status eq " M") {
+	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	} elsif ($status eq " D") {
+	} else {
+	    die "unknown status $status for $repo$file";
+	}
+    }
+    if ($type eq "link") {
 	my $file = $rel;
 	warn "link $file";
 	my $dirname = dirname($file);
@@ -327,6 +358,20 @@ for my $item (values %items) {
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob HEAD:'$file')`, "import/$repo$file") or die;
+	} elsif ($status eq "??") {
+	} else {
+	    die "unknown status $status for $repo$file";
+	}
+    }
+    if ($type eq "link") {
+	my $file = $rel;
+	warn "link $file";
+	my $dirname = dirname($file);
+	my $fullpath = $repo . $dirname;
+	$fullpath =~ s/\/\.$//;
+	next unless $dirchanged{$fullpath};
+	my $status = $status{$repo . $file};
+	if (!defined($status)) {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq "??") {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
