@@ -204,7 +204,7 @@ for my $repo (@repos) {
     }
 
     my @lstree_lines = split(/\0/, `git ls-tree -r HEAD -z`);
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $5 } } @lstree_lines;
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
 	$extmode{$m->{path}} = $m->{extmode};
@@ -214,6 +214,10 @@ for my $repo (@repos) {
 	    $oldtype{$m->{path}} = "file";
 	} else {
 	    die "unknown mode";
+	}
+
+	for my $pref (prefixes{$m->{path}}) {
+	    $oldtype{$m->{path}} = "dir";
 	}
     }
 }
