@@ -53,6 +53,28 @@ sub nsystem {
 }
 
 my $do_hardlink;
+sub mkdirp {
+    my ($dir) = @_;
+
+    if (-d $dir) {
+	return 1;
+    } else {
+	return nsystem("mkdir -p '$dir'");
+    }
+}
+
+sub symlink_relative {
+    my ($src, $dst) = @_;
+
+    nsystem("ln -nsrv '$src' '$dst'") or die;
+}
+
+sub symlink_absolute {
+    my ($src, $dst) = @_;
+
+    nsystem("ln -sv '$src' '$dst'") or die;
+}
+
 sub copy_or_hardlink {
     my ($src, $dst) = @_;
 
@@ -237,10 +259,10 @@ for my $repo (@repos) {
 	    }
 
 	    if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
-		nsystem("ln -nvsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
+		symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
 	    }
 	    if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
-		nsystem("ln -nvsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
+		symlink_relative("$outdir/repo-overlay/$dir", "export/$dir") or die;
 	    }
 	} elsif ($type eq "file") {
 	    my $file = $rel;
@@ -251,8 +273,8 @@ for my $repo (@repos) {
 	    next unless $dirchanged{$fullpath};
 	    my $status = $status{$repo . $file};
 	    if (!defined($status)) {
-		nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' import/'$repo$file'") or die;
-		nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' export/'$repo$file'") or die;
+		symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
+		symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
 	    } elsif ($status eq "??") {
 		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	    } elsif ($status eq " M") {
@@ -272,7 +294,7 @@ for my $repo (@repos) {
 	    next unless $dirchanged{$fullpath};
 	    my $status = $status{$repo . $file};
 	    if (!defined($status)) {
-		nsystem("ln -sv `(cd $pwd/$repo; git cat-file blob HEAD:'$file')` import/'$repo$file'") or die;
+		symlink_absolute(`(cd $pwd/$repo; git cat-file blob HEAD:'$file')`, "import/'$repo$file") or die;
 		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	    } elsif ($status eq "??") {
 		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
