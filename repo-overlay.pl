@@ -155,14 +155,17 @@ for my $repo (@repos) {
 	}
     }
 }
+
 for my $repo (@repos) {
+    my @items;
+
     chdir($pwd);
     my @dirs = split(/\0/, `find '$repo' -name '.git' -prune -o -type d -print0`);
-    chdir($repo);
+    my @files = split(/\0/, `find '$repo' -name '.git' -prune -o -type f -print0`);
+    my @links = split(/\0/, `find '$repo' -name '.git' -prune -o -type l -print0`);
+    my @other = split(/\0/, `find '$repo' -name '.git' -prune -o -not '(' -type d -o -type f -o -type l ')' -print0`);
 
-    my @files = split(/\0/, `find -name '.git' -prune -o -type f -print0`);
-    my @links = split(/\0/, `find -name '.git' -prune -o -type l -print0`);
-    my @other = split(/\0/, `find -name '.git' -prune -o -not '(' -type d -o -type f -o -type l ')' -print0`);
+    chdir($repo);
 
     die join(", ", @other) if scalar(@other);
 
@@ -177,67 +180,100 @@ for my $repo (@repos) {
     map { warn "spaces in $_" if $_ =~ / /; } (@files,@dirs,@links);
     map { die "single quote in $_" if $_ =~ /\'/; } (@files,@dirs,@links);
     
-    chdir($outdir);
-    
-    for my $dir (@dirs) {
-	my $status = $status{$dir};
-	die if $dir eq ".";
-	my $dirname = $dir;
-	while(!$dirchanged{$dirname}) {
-	    ($dir, $dirname) = ($dirname, dirname($dirname));
-	}
+    for my $file (@dirs) {
+	my $abspath = $file;
+	# potentially empty
+	my $relpath = substr($abspath, length($repo));
+	my $type = "dir";
 
-	if ($status{$dirname} ne "??" and ! -d "import/$dirname") {
-	    nsystem("mkdir -p '$outdir/import/$dirname'") or die;
-	}
-	if ($status{$dirname} ne " D" and ! -d "export/$dirname") {
-	    nsystem("mkdir -p '$outdir/export/$dirname'") or die;
-	}
-
-	if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
-	    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
-	}
-	if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
-	    nsystem("ln -nvsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
-	}
+	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
     }
 
     for my $file (@files) {
-	#warn "file $file";
-	my $dirname = dirname($file);
-	my $fullpath = $repo . $dirname;
-	$fullpath =~ s/\/\.$//;
-	next unless $dirchanged{$fullpath};
-	my $status = $status{$repo . $file};
-	if (!defined($status)) {
-	    nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' import/'$repo$file'") or die;
-	    nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' export/'$repo$file'") or die;
-	} elsif ($status eq "??") {
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} elsif ($status eq " M") {
-	    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} elsif ($status eq " D") {
-	    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
-	} else {
-	    die "unknown status $status for $repo$file";
-	}
+	my $abspath = $file;
+	die unless substr($abspath, 0, length($repo)) eq $repo;
+	my $relpath = substr($abspath, length($repo));
+	my $type = "file";
+
+	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
     }
 
     for my $file (@links) {
-	warn "link $file";
-	my $dirname = dirname($file);
-	my $fullpath = $repo . $dirname;
-	$fullpath =~ s/\/\.$//;
-	next unless $dirchanged{$fullpath};
-	my $status = $status{$repo . $file};
-	if (!defined($status)) {
-	    nsystem("ln -sv `(cd $pwd/$repo; git cat-file blob HEAD:'$file')` import/'$repo$file'") or die;
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} elsif ($status eq "??") {
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} else {
-	    die "unknown status $status for $repo$file";
+	my $abspath = $file;
+	die unless substr($abspath, 0, length($repo)) eq $repo;
+	my $relpath = substr($abspath, length($repo));
+	my $type = "link";
+
+	push @items, { abs => $abspath, rel => $relpath, repo => $repo, type => $type };
+    }
+
+    chdir($outdir);
+
+    for my $item (@items) {
+	my $abs = $item->{abs};
+	my $rel = $item->{rel};
+	my $type = $item->{type};
+
+        if ($type eq "dir") {
+	    my $dir = $abs;
+
+	    my $status = $status{$dir};
+	    die if $dir eq ".";
+	    my $dirname = $dir;
+	    while(!$dirchanged{$dirname}) {
+		($dir, $dirname) = ($dirname, dirname($dirname));
+	    }
+
+	    if ($status{$dirname} ne "??" and ! -d "import/$dirname") {
+		nsystem("mkdir -p '$outdir/import/$dirname'") or die;
+	    }
+	    if ($status{$dirname} ne " D" and ! -d "export/$dirname") {
+		nsystem("mkdir -p '$outdir/export/$dirname'") or die;
+	    }
+
+	    if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
+		nsystem("ln -nvsr '$outdir/repo-overlay/$dir' import/'$dir'") or die;
+	    }
+	    if ($status{$dirname} ne " D" and ! (-e "export/$dir" || -l "export/$dir")) {
+		nsystem("ln -nvsr '$outdir/repo-overlay/$dir' export/'$dir'") or die;
+	    }
+	} elsif ($type eq "file") {
+	    my $file = $rel;
+
+	    my $dirname = dirname($file);
+	    my $fullpath = $repo . $dirname;
+	    $fullpath =~ s/\/\.$//;
+	    next unless $dirchanged{$fullpath};
+	    my $status = $status{$repo . $file};
+	    if (!defined($status)) {
+		nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' import/'$repo$file'") or die;
+		nsystem("ln -nsrv '$outdir/repo-overlay/$repo$file' export/'$repo$file'") or die;
+	    } elsif ($status eq "??") {
+		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	    } elsif ($status eq " M") {
+		nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
+		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	    } elsif ($status eq " D") {
+		nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > import/'$repo$file'") or die;
+	    } else {
+		die "unknown status $status for $repo$file";
+	    }
+	} elsif ($type eq "link") {
+	    my $file = $rel;
+	    warn "link $file";
+	    my $dirname = dirname($file);
+	    my $fullpath = $repo . $dirname;
+	    $fullpath =~ s/\/\.$//;
+	    next unless $dirchanged{$fullpath};
+	    my $status = $status{$repo . $file};
+	    if (!defined($status)) {
+		nsystem("ln -sv `(cd $pwd/$repo; git cat-file blob HEAD:'$file')` import/'$repo$file'") or die;
+		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	    } elsif ($status eq "??") {
+		copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	    } else {
+		die "unknown status $status for $repo$file";
+	    }
 	}
     }
     
