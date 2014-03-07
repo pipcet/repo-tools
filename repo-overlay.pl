@@ -257,13 +257,6 @@ for my $repo (@repos) {
 		($dir, $dirname) = ($dirname, dirname($dirname));
 	    }
 
-	    if ($status{$dirname} ne "??" and ! -d "import/$dirname") {
-		nsystem("mkdir -p '$outdir/import/$dirname'") or die;
-	    }
-	    if ($status{$dirname} ne " D" and ! -d "export/$dirname") {
-		nsystem("mkdir -p '$outdir/export/$dirname'") or die;
-	    }
-
 	    if ($status{$dirname} ne "??" and ! (-e "import/$dir" || -l "import/$dir")) {
 		symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
 	    }
