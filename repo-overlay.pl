@@ -150,6 +150,8 @@ nsystem("rm $outdir/repo-overlay");
 
 my %dirchanged;
 $dirchanged{"."} = 1;
+my %oldtype;
+my %newtype;
 my %status;
 
 my @repos = repos();
@@ -179,6 +181,7 @@ for my $repo (@repos) {
 
 	    for my $extra (@extra) {
 		$status{$repo . $extra} = "??";
+		$oldtype{$repo . $extra} = "none";
 		for my $pref (prefixes($repo . $extra)) {
 		    $dirchanged{$pref} = 1;
 		}
@@ -187,6 +190,7 @@ for my $repo (@repos) {
 
 	$path =~ s/\/$//;
 	$status{$repo . $path} = $status;
+	$oldtype{$repo . $extra} = "none" if $status eq "??";
 
 	if ($status eq "??" or
 	    $status eq " M" or
@@ -196,6 +200,20 @@ for my $repo (@repos) {
 	    }
 	} else {
 	    die "unknown status $status in repo $repo, path " . $p->{path};
+	}
+    }
+
+    my @lstree_lines = split(/\0/, `git ls-tree -r HEAD -z`);
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $5 } } @lstree_lines;
+
+    for my $m (@modes) {
+	$extmode{$m->{path}} = $m->{extmode};
+	if ($m->{extmode} eq "120") {
+	    $oldtype{$m->{path}} = "link";
+	} elsif ($m->{extmode} eq "100") {
+	    $oldtype{$m->{path}} = "file";
+	} else {
+	    die "unknown mode";
 	}
     }
 }
