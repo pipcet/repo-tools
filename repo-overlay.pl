@@ -159,6 +159,9 @@ my %items;
 sub store_item {
     my ($item) = @_;
 
+    $item->{abs} =~ s/\/*$//;
+    $item->{rel} =~ s/\/*$//;
+
     $item->{rel} = substr($item->{abs}, length($item->{repo}));
 
     my $olditem = $items{$item->{abs}};
@@ -189,6 +192,8 @@ for my $repo (@repos) {
     } elsif ($version{$rversion{$head}} ne $head) {
 	die "version mismatch";
     }
+
+    store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
     
     my @porc_lines = split(/\0/, `git status -z`);
 
