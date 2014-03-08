@@ -81,8 +81,8 @@ sub new {
     $h->{n} = 0;
     $h->{repo} = $repo;
     my $tformat;
-    $tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..%N%n..%s%b%n..SHA:%h";
-    open($h->{fh}, "(cd '$repo'; git log -p -m --first-parent --pretty=tformat:'$tformat' --since='1 week ago' --date=iso)|") or die;
+    $tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..%N%n..%s%b%n..SHA:%H";
+    open($h->{fh}, "(cd '$repo'; git log -p -m --first-parent --pretty=tformat:'$tformat' --since='5 weeks ago' --date=iso)|") or die;
 
     return bless($h, $class);
 }
@@ -102,14 +102,16 @@ for my $repo (@repos) {
     }
 }
 
-print " -*- mode: Diff; eval: (orgstruct++-mode 1); -*-\n";
+print " -*- mode: Diff; eval: (orgstruct++-mode 1); -*-\n" unless $do_just_shas;
 
 while(1) {
     my @dates = sort { $b->[0] <=> $a->[0] } map { [$_->[0]{rawdate}, $_->[0], $_->[1]] } grep { defined($_->[0]) } map { [$_->peek, $_] } values(%r);
 
     if (scalar(@dates)) {
 	if ($do_just_shas) {
-	    print $dates[0][2]->get->{sha} . "\n";
+	    my $repo = $dates[0][2]->{repo};
+	    my $entry = $dates[0][2]->get;
+	    print "--apply=" . $entry->{sha} . " --apply-repo=" . $repo . "\n";
 	} else {
 	    my $repo = $dates[0][2]->{repo};
 	    my $raw = $dates[0][2]->get->{content};
