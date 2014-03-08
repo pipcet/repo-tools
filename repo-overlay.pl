@@ -211,7 +211,12 @@ if (defined($apply) and defined($apply_repo)) {
 
     my $repo = $apply_repo;
     chdir($repo);
+    # XXX octopus merges are broken. How do I find out how many parents a commit has?
     if (revparse($apply . "^") eq $version{$repo}) {
+	warn "should be able to apply commit $apply to $apply_repo.";
+    } elsif (revparse($apply . "^2") eq $version{$repo}) {
+	warn "should be able to apply commit $apply to $apply_repo.";
+    } elsif (revparse($apply . "^3") eq $version{$repo}) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
 	my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
@@ -220,11 +225,6 @@ if (defined($apply) and defined($apply_repo)) {
 	}
 	if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
 	    $msg .= "missing link for $repo";
-	} else {
-	    my $mb = `git merge-base $apply $version{$repo}`;
-	    chomp($mb);
-	    $msg .= "\nmerge base:\n";
-	    $msg .= `git show $mb|head -5`;
 	}
 
 	$msg .= " repo ancestors:\n";
@@ -309,7 +309,9 @@ for my $repo (@repos) {
     my $oldhead = $head;
 
     if (defined($apply)) {
-	if (revparse($apply . "^") eq "$head") {
+	if (revparse($apply . "^") eq $head or
+	    revparse($apply . "^2") eq $head or
+	    revparse($apply . "^3") eq $head) {
 	    $head = $apply;
 	    warn "successfully applied $apply to $repo";
 	    $apply_success = 1;
