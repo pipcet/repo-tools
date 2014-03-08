@@ -425,10 +425,6 @@ for my $item (values %items) {
     if ($oldtype eq "file") {
 	my $file = $rel;
 
-	my $dirname = dirname($file);
-	my $fullpath = $repo . $dirname;
-	$fullpath =~ s/\/\.$//;
-	next unless $items{$fullpath}{changed};
 	if ($item->{changed}) {
 	    cat_file($repo, $head, $file, "import/$repo$file");
 	} else {
@@ -438,10 +434,6 @@ for my $item (values %items) {
     if ($type eq "file") {
 	my $file = $rel;
 
-	my $dirname = dirname($file);
-	my $fullpath = $repo . $dirname;
-	$fullpath =~ s/\/\.$//;
-	next unless $items{$fullpath}{changed};
 	if ($item->{changed}) {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} else {
