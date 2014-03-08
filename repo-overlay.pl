@@ -292,7 +292,7 @@ for my $repo (@repos) {
     chdir($pwd);
     chdir($repo);
     my $head;
-    if ($do_new_symlinks) {
+    if ($do_new_versions) {
 	$head = revparse($branch) // revparse("HEAD");
     } else {
 	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
