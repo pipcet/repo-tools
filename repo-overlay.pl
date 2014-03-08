@@ -336,8 +336,11 @@ for my $repo (@repos) {
 	}
     }
 
-    next unless $items{$repo =~ s/\/$//r}{changed};
-    warn "lstree $repo\n";
+    if (!$items{$repo =~ s/\/$//r}{changed}) {
+	store_item({oldtype=>"dir", abs=>($repo =~ s/\/$//r), repo=>$repo});
+
+	next;
+    }
 
     # git ls-tree shows both files and directories, but doesn't
     # recurse. git ls-tree -r recurses, but doesn't show
