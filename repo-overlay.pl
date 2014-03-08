@@ -92,6 +92,9 @@ sub copy_or_hardlink {
     return nsystem("cp -v$hl '$src' '$dst'") or die;
 }
 
+my $do_new_versions;
+my $do_new_symlinks;
+my $apply;
 
 my $outdir;
 my $indir = ".";
@@ -103,6 +106,9 @@ GetOptions(
     "out=s" => \$outdir,
     "in=s" => \$indir,
     "branch=s" => \$branch,
+    "new-versions!" => \$do_new_versions,
+    "new-symlinks!" => \$do_new_symlinks,
+    "apply=s" => \$apply,
     );
 
 $outdir =~ s/\/*$//;
@@ -126,6 +132,10 @@ nsystem("rm -rf $outdir/export/*");
 nsystem("rm -rf $outdir/import/.repo");
 nsystem("rm -rf $outdir/export/.repo");
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
+
+if ($do_new_versions) {
+    nsystem("rm $outdir/versions/versions.txt; touch $outdir/versions/versions.txt");
+}
 
 my %version;
 my %rversion;
@@ -152,6 +162,15 @@ nsystem("rm $outdir/repo-overlay");
 
 my %dirchanged;
 $dirchanged{"."} = 1;
+
+unless ($do_new_symlinks) {
+    my @dirs = split(/\0/, `find $outdir/import -name .git -prune -o -type d -print0`);
+
+    for my $dir (@dirs) {
+	$dirchanged{$dir} = 1;
+    }
+}
+
 my %oldtype;
 my %newtype;
 my %status;
@@ -214,6 +233,14 @@ for my $repo (@repos) {
     $head = `git rev-parse HEAD` if ($head eq "\n");
     chomp($head);
     $repos{$repo}{head} = $head;
+
+    if (defined($apply)) {
+	if (nsystem("git rev-parse $apply -- 2>/dev/null")) {
+	    if (`git rev-parse $apply'^' --` eq "$head\n") {
+		$head = $apply;
+	    }
+	}
+    }
 
     if (!defined($rversion{$head}) or
 	$head ne $version{$repo}) {
