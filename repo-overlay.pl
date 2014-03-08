@@ -184,10 +184,12 @@ unless ($do_new_symlinks) {
     chdir($pwd);
 }
 
-nsystem("rm -rf $outdir/import/*");
-nsystem("rm -rf $outdir/export/*");
-nsystem("rm -rf $outdir/import/.repo");
-nsystem("rm -rf $outdir/export/.repo");
+if ($do_new_symlinks) {
+    nsystem("rm -rf $outdir/import/*");
+    nsystem("rm -rf $outdir/export/*");
+    nsystem("rm -rf $outdir/import/.repo");
+    nsystem("rm -rf $outdir/export/.repo");
+}
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
 
 if ($do_new_versions) {
@@ -251,8 +253,14 @@ if (defined($apply) and defined($apply_repo)) {
     chdir($pwd);
 }
 
-my @repos = repos();
-my %repos;
+my @repos;
+if (defined($apply) and defined($apply_repo) and
+    !$do_new_symlinks and !$do_new_versions) {
+    @repos = ($apply_repo =~ s/\/*$/\//r);
+} else {
+    @repos = repos();
+}
+
 for my $repo (@repos) {
     $repos{$repo} = { repo=>$repo };
     chdir($pwd);
