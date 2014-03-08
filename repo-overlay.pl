@@ -334,25 +334,25 @@ for my $repo (@repos) {
     next unless $items{$repo =~ s/\/$//r}{changed};
     warn "lstree $repo\n";
 
-    my @lstree_lines = split(/\0/, `git ls-tree -r '$head' -z`);
+    # git ls-tree shows both files and directories, but doesn't
+    # recurse. git ls-tree -r recurses, but doesn't show
+    # directories. git ls-tree -dr recurses, but only shows
+    # directories. We want everything.
+    my @lstree_lines = (split(/\0/, `git ls-tree -r '$head' -z`),
+			split(/\0/, `git ls-tree -d -r '$head' -z`));
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
 	warn $m->{path} . " " . $m->{extmode} . "\n";
-	my ($dir, $entry) = ($m->{path}, $m->{path});
-	until ($items{$dir}{changed}) {
-	    ($dir,$entry) = (dirname($dir),$dir);
-	}
-	for my $pref (prefixes($entry)) {
-	    last if length($pref) < length($repo);
-	    store_item({oldtype=>"dir", abs=>$pref, repo=>$repo});
-	}
-	next unless $items{dirname($m->{path})}{changed};
+
+	next unless $items{dirname($m->{path})} and $items{dirname($m->{path})}{changed};
 
 	if ($m->{extmode} eq "120") {
 	    store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
 	    store_item({oldtype=>"file", abs=>$m->{path}, repo=>$repo});
+	} elsif ($m->{extmode} eq "040") {
+	    store_item({oldtype=>"dir", abs=>$m->{path}, repo=>$repo});
 	} else {
 	    die "unknown mode";
 	}
