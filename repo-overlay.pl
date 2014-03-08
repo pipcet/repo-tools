@@ -177,6 +177,13 @@ unless ($do_new_symlinks) {
 	$dirchanged{$dir} = 1;
     }
 
+    my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
+
+    for my $file (@files) {
+	$file =~ s/\/*$//;
+	$dirchanged{$file} = 1;
+    }
+
     chdir($pwd);
 }
 
