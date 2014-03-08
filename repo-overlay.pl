@@ -253,7 +253,7 @@ for my $repo (@repos) {
 
     store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
     
-    my @porc_lines = split(/\0/, `git status -z`);
+    my @porc_lines = split(/\0/, `git status --ignored -z`);
 
     my @porc = map { /^(.)(.) (.*)$/; { a => $1, b => $2, path => $3 } } @porc_lines;
     
@@ -285,6 +285,8 @@ for my $repo (@repos) {
 	    for my $pref (prefixes($repo . $path)) {
 		$dirchanged{$pref} = 1;
 	    }
+	} elsif ($status eq "!!") {
+	    # nothing
 	} else {
 	    die "unknown status $status in repo $repo, path " . $p->{path};
 	}
