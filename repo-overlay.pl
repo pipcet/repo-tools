@@ -260,10 +260,11 @@ for my $repo (@repos) {
     } else {
 	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
     }
-    chomp($head);
+
+    my $oldhead = $head;
 
     if (defined($apply)) {
-	if (revparse($apply . "^") eq "$head\n") {
+	if (revparse($apply . "^") eq "$head") {
 	    $head = $apply;
 	    warn "successfully applied $apply to $repo";
 	}
@@ -312,7 +313,13 @@ for my $repo (@repos) {
 
     store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
 
-    my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+    my %diffstat;
+    if ($oldhead eq $head) {
+	%diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+    } else {
+	%diffstat = reverse split(/\0/, `git diff $oldhead..$head --name-status -z`);
+	die "empty diffstat" unless scalar(keys %diffstat);
+    }
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
