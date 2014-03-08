@@ -99,6 +99,8 @@ my $outdir;
 my $indir = ".";
 
 my $branch = '@{1.month.ago}';
+my $commit_message_file;
+
 
 GetOptions(
     "hardlink!" => \$do_hardlink,
@@ -109,6 +111,7 @@ GetOptions(
     "new-symlinks!" => \$do_new_symlinks,
     "apply=s" => \$apply,
     "apply-repo=s" => \$apply_repo,
+    "commit-message-file=s" => \$commit_message_file,
     ) or die;
 
 $apply_repo =~ s/\/*$/\//;
@@ -538,7 +541,14 @@ copy_or_hardlink("$outdir/versions/versions.txt", "$outdir/import/") or die;
 
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
-nsystem("ln -sv $pwd $outdir/repo-overlay");
+nsystem("ln -s $pwd $outdir/repo-overlay");
+
+if (defined($commit_message_file)) {
+    chdir("$outdir/import");
+    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date
+    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date
+    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date
+}
 
 # useful commands:
 #  repo-overlay.pl -- sync repository to export/ import/
