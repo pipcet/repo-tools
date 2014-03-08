@@ -215,10 +215,6 @@ close $version_fh;
 open $version_fh, ">>$outdir/versions/versions.txt";
 
 
-my %oldtype;
-my %newtype;
-my %status;
-
 sub previous_commit {
     my ($head) = @_;
     my $last = `git rev-parse '$head~1'`;
@@ -377,7 +373,6 @@ for my $repo (@repos) {
 
 	$path =~ s/\/$//;
 	store_item({abs=>$repo.$path, status=>$status);
-	$oldtype{$repo . $path} = "none" if $status eq "??";
 	store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"}) if $status eq "??";
 
 	if ($status eq "??" or
