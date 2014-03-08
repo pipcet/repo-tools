@@ -96,10 +96,13 @@ sub copy_or_hardlink {
 my $outdir;
 my $indir = ".";
 
+my $branch = "HEAD";
+
 GetOptions(
     "hardlink!" => \$do_hardlink,
     "out=s" => \$outdir,
     "in=s" => \$indir,
+    "branch=s" => \$branch,
     );
 
 $outdir =~ s/\/*$//;
@@ -110,13 +113,12 @@ chdir($indir) or die;
 my $pwd = `pwd`;
 chomp($pwd);
 
-
 sub cat_file {
     my ($repo, $file, $dst) = @_;
 
     mkdirp(dirname($dst)) or die;
 
-    nsystem("(cd $pwd/$repo; git cat-file blob HEAD:'$file') > $dst") or die;
+    nsystem("(cd $pwd/$repo; git cat-file blob '$branch':'$file') > $dst") or die;
 }
 
 nsystem("rm -rf $outdir/import/*");
@@ -206,7 +208,7 @@ my @repos = repos();
 for my $repo (@repos) {
     chdir($pwd);
     chdir($repo);
-    my $head = `git rev-parse HEAD`;
+    my $head = `git rev-parse '$branch'`;
     chomp($head);
 
     if (!defined($rversion{$head}) or
@@ -290,7 +292,7 @@ for my $repo (@repos) {
 
     next unless scalar(@porc);
 
-    my @lstree_lines = split(/\0/, `git ls-tree -r HEAD -z`);
+    my @lstree_lines = split(/\0/, `git ls-tree -r '$branch' -z`);
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
@@ -411,7 +413,7 @@ for my $item (values %items) {
 	next unless $dirchanged{$fullpath};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
-	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob HEAD:'$file')`, "import/$repo$file") or die;
+	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$branch':'$file')`, "import/$repo$file") or die;
 	} elsif ($status eq "??") {
 	} else {
 	    die "unknown status $status for $repo$file";
