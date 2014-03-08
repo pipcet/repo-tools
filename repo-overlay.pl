@@ -136,6 +136,37 @@ sub cat_file {
 my %dirchanged;
 $dirchanged{"."} = 1;
 
+# see comment at end of file
+nsystem("rm $outdir/repo-overlay");
+
+my %items;
+
+sub store_item {
+    my ($item) = @_;
+
+    $item->{abs} =~ s/\/*$//;
+    $item->{rel} =~ s/\/*$//;
+
+    $item->{rel} = substr($item->{abs}, length($item->{repo}));
+
+    my $olditem = $items{$item->{abs}};
+
+    if ($olditem) {
+	my $repo = $item->{repo};
+	if (length($olditem->{repo}) > length($item->{repo})) {
+	    warn "nested item ". $item->{abs}." in " . $item->{repo} . " and " . $olditem->{repo};
+	    $repo = $olditem->{repo};
+	}
+
+	for my $key (keys %$item) {
+	    $olditem->{$key} = $item->{$key};
+	}
+	$olditem->{repo} = $repo;
+    } else {
+	$items{$item->{abs}} = $item;
+    }
+}
+
 unless ($do_new_symlinks) {
     chdir("$outdir/import");
     my @dirs = split(/\0/, `find -name .git -prune -o -type d -print0`);
@@ -179,38 +210,10 @@ close $version_fh;
 
 open $version_fh, ">>$outdir/versions/versions.txt";
 
-# see comment at end of file
-nsystem("rm $outdir/repo-overlay");
 
 my %oldtype;
 my %newtype;
 my %status;
-
-my %items;
-
-sub store_item {
-    my ($item) = @_;
-
-    $item->{abs} =~ s/\/*$//;
-    $item->{rel} =~ s/\/*$//;
-
-    $item->{rel} = substr($item->{abs}, length($item->{repo}));
-
-    my $olditem = $items{$item->{abs}};
-
-    if ($olditem) {
-	if (length($olditem->{repo}) > length($item->{repo})) {
-	    warn "nested item ". $item->{abs}." in " . $item->{repo} . " and " . $olditem->{repo};
-	    return;
-	}
-
-	for my $key (keys %$item) {
-	    $olditem->{$key} = $item->{$key};
-	}
-    } else {
-	$items{$item->{abs}} = $item;
-    }
-}
 
 sub previous_commit {
     my ($head) = @_;
