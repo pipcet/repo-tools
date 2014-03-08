@@ -188,12 +188,6 @@ unless ($do_new_symlinks) {
     chdir($pwd);
 }
 
-if ($do_new_symlinks) {
-    nsystem("rm -rf $outdir/import/*");
-    nsystem("rm -rf $outdir/export/*");
-    nsystem("rm -rf $outdir/import/.repo");
-    nsystem("rm -rf $outdir/export/.repo");
-}
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
 
 if ($do_new_versions) {
@@ -255,6 +249,16 @@ if (defined($apply) and defined($apply_repo)) {
 	die "cannot apply patch $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^");
     }
     chdir($pwd);
+}
+
+if ($do_new_symlinks or !defined($apply_repo)) {
+    nsystem("rm -rf $outdir/import/*");
+    nsystem("rm -rf $outdir/export/*");
+    nsystem("rm -rf $outdir/import/.repo");
+    nsystem("rm -rf $outdir/export/.repo");
+} else {
+    nsystem("rm -rf $outdir/import/$apply_repo");
+    nsystem("rm -rf $outdir/export/$apply_repo");
 }
 
 my @repos;
