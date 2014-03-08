@@ -384,6 +384,7 @@ for my $repo (@repos) {
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
+	next unless $dirchanged{dirname($m->{path})};
 	if ($m->{extmode} eq "120") {
 	    store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
@@ -419,6 +420,7 @@ for my $item (values %items) {
 chdir($outdir);
 for my $item (values %items) {
     my $abs = $item->{abs};
+    next unless $dirchanged{dirname($abs)};
     my $rel = $item->{rel};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
