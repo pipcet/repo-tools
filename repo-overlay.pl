@@ -494,7 +494,7 @@ for my $item (values %items) {
 	my $dirname = dirname($file);
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
-	next unless $itesm{$fullpath}{changed};
+	next unless $items{$fullpath}{changed};
 	my $status = $items{$repo . $file}{status};
 	if (!defined($status)) {
 	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
