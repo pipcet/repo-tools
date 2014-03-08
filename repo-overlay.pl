@@ -372,7 +372,7 @@ for my $repo (@repos) {
 	}
 
 	$path =~ s/\/$//;
-	store_item({abs=>$repo.$path, status=>$status);
+	store_item({abs=>$repo.$path, status=>$status});
 	store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"}) if $status eq "??";
 
 	if ($status eq "??" or
