@@ -207,6 +207,18 @@ if (defined($apply) and defined($apply_repo)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
 	my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
+	if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
+	    exit(0);
+	}
+	if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
+	    $msg .= "missing link for $repo";
+	} else {
+	    my $mb = `git merge-base $apply $version{$repo}`;
+	    chomp($mb);
+	    $msg .= "\nmerge base:\n";
+	    $msg .= `git show $mb|head -5`;
+	}
+
 	$msg .= " repo ancestors:\n";
 	$msg .= "".revparse($version{$repo}."")."\n";
 	$msg .= "".revparse($version{$repo}."~1")."\n";
@@ -219,6 +231,13 @@ if (defined($apply) and defined($apply_repo)) {
 	$msg .= "".revparse($apply."~2")."\n";
 	$msg .= "".revparse($apply."~3")."\n";
 	$msg .= "".revparse($apply."~4")."\n";
+
+	$msg .= "\ngit log:\n";
+	$msg .= `git log -1`;
+	$msg .= "\ncommit file:\n";
+	$msg .= `head -8 $commit_message_file`;
+
+	$msg .= "\n\n\n";
 
 	die($msg);
     }
