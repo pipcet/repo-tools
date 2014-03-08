@@ -151,7 +151,6 @@ sub store_item {
     if ($olditem) {
 	my $repo = $item->{repo};
 	if (length($olditem->{repo}) > length($item->{repo})) {
-	    warn "nested item ". $item->{abs}." in " . $item->{repo} . " and " . $olditem->{repo};
 	    $repo = $olditem->{repo};
 	}
 
@@ -328,19 +327,17 @@ for my $repo (@repos) {
 	my $stat = $diffstat{$path};
 
 	if ($stat eq "M") {
-	    store_item({abs=>$repo.$path, status=>" M"});
+	    store_item({abs=>$repo.$path, status=>" M", changed=>1});
 	    for my $pref (prefixes($repo . $path)) {
 		store_item({abs=>$pref, changed=>1});
 	    }
 	} elsif ($stat eq "A") {
-	    store_item({abs=>$repo.$path, status=>"??"});
-	    my $oldtype = "none";
-	    store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"});
+	    store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??", changed=>1});
 	    for my $pref (prefixes($repo . $path)) {
 		store_item({abs=>$pref, changed=>1});
 	    }
 	} elsif ($stat eq "D") {
-	    store_item({abs=>$repo.$path, status=>" D"});
+	    store_item({abs=>$repo.$path, status=>" D", changed=>1});
 	    for my $pref (prefixes($repo . $path)) {
 		store_item({abs=>$pref, changed=>1});
 	    }
@@ -476,16 +473,10 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $items{$fullpath}{changed};
-	my $status = $items{$repo . $file}{status};
-	if (!defined($status)) {
-	    symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
-	} elsif ($status eq "??") {
-	} elsif ($status eq " M") {
-	    cat_file($repo, $head, $file, "import/$repo$file");
-	} elsif ($status eq " D") {
+	if ($item->{changed}) {
 	    cat_file($repo, $head, $file, "import/$repo$file");
 	} else {
-	    die "unknown status $status for $repo$file";
+	    symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
 	}
     }
     if ($type eq "file") {
@@ -495,16 +486,10 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $items{$fullpath}{changed};
-	my $status = $items{$repo . $file}{status};
-	if (!defined($status)) {
-	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
-	} elsif ($status eq "??") {
+	if ($item->{changed}) {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} elsif ($status eq " M") {
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} elsif ($status eq " D") {
 	} else {
-	    die "unknown status $status for $repo$file";
+	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
 	}
     }
     if ($oldtype eq "link") {
@@ -514,13 +499,7 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $items{$fullpath}{changed};
-	my $status = $items{$repo . $file}{status};
-	if (!defined($status)) {
-	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
-	} elsif ($status eq "??") {
-	} else {
-	    die "unknown status $status for $repo$file";
-	}
+	symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
     }
     if ($type eq "link") {
 	my $file = $rel;
@@ -529,14 +508,7 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $items{$fullpath}{changed};
-	my $status = $items{$repo . $file}{status};
-	if (!defined($status)) {
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} elsif ($status eq "??") {
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
-	} else {
-	    die "unknown status $status for $repo$file";
-	}
+	copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
     }
 }
 
