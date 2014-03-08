@@ -130,7 +130,11 @@ sub cat_file {
 
     mkdirp(dirname($dst)) or die;
 
-    nsystem("(cd $pwd/$repo; git cat-file blob '$branch':'$file') > $dst") or die;
+    if ($branch ne "") {
+	nsystem("(cd $pwd/$repo; git cat-file blob '$branch':'$file') > $dst") or die;
+    } else {
+	nsystem("cat $pwd/$repo/$file > $dst") or die;
+    }
 }
 
 # see comment at end of file
