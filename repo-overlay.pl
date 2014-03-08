@@ -300,7 +300,10 @@ for my $repo (@repos) {
 	die "version mismatch";
     }
 
-    store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
+    store_item({abs=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
+    for my $pref (prefixes($repo)) {
+	store_item({abs=>$pref, oldtype=>"dir"});
+    }
 
     my %diffstat;
     if ($oldhead eq $head) {
