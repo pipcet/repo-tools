@@ -138,9 +138,6 @@ sub cat_file {
     }
 }
 
-# see comment at end of file
-nsystem("rm $outdir/repo-overlay");
-
 my %items;
 
 sub store_item {
@@ -189,6 +186,9 @@ unless ($do_new_symlinks) {
 
     chdir($pwd);
 }
+
+# see comment at end of file
+nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
 
