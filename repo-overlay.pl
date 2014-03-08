@@ -384,13 +384,14 @@ for my $item (values %items) {
 
 chdir($outdir);
 for my $item (values %items) {
+    my $repo = $item->{repo};
+    next unless $repos{$repo};
     my $abs = $item->{abs};
     next if $abs eq "" or $abs eq ".";
     next unless $items{dirname($abs)}{changed};
     my $rel = $item->{rel};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
-    my $repo = $item->{repo};
     my $head = $repos{$repo}{head};
 
     if ($oldtype eq "dir") {
