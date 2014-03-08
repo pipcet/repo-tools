@@ -84,6 +84,10 @@ my $indir = ".";
 my $branch = '@{1.month.ago}';
 my $commit_message_file;
 
+my $commit_commitdate;
+my $commit_committer;
+my $commit_authordate;
+my $commit_author;
 
 GetOptions(
     "hardlink!" => \$do_hardlink,
@@ -95,6 +99,10 @@ GetOptions(
     "apply=s" => \$apply,
     "apply-repo=s" => \$apply_repo,
     "commit-message-file=s" => \$commit_message_file,
+    "commit-authordate=s" => \$commit_authordate,
+    "commit-author=s" => \$commit_author,
+    "commit-commitdate=s" => \$commit_commitdate,
+    "commit-committer=s" => \$commit_committer,
     ) or die;
 
 $apply_repo =~ s/\/*$/\//;
@@ -490,7 +498,9 @@ nsystem("ln -s $pwd $outdir/repo-overlay");
 
 if (defined($commit_message_file)) {
     chdir("$outdir/import");
-    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date  
+    nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
+	    (defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
+	    (defined($commit_author) ? "--author '$commit_author' " : ""));
 }
 
 # useful commands:

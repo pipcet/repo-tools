@@ -31,7 +31,17 @@ sub peek1 {
 
 	if ($line =~ /^\.\.CommitDate:[ \t]*(.*)$/) {
 	    $h->{commit}->{date} = $1;
+	    $h->{commit}->{commitdate} = $1;
 	    $h->{commit}->{rawdate} = `date -d '$1' +'%s'`;
+	}
+	if ($line =~ /^\.\.Committer:[ \t]*(.*)$/) {
+	    $h->{commit}->{committer} = $1;
+	}
+	if ($line =~ /^\.\.AuthorDate:[ \t]*(.*)$/) {
+	    $h->{commit}->{authordate} = $1;
+	}
+	if ($line =~ /^\.\.Author:[ \t]*(.*)$/) {
+	    $h->{commit}->{author} = $1;
 	}
 	if ($line =~ /^\.\.SHA:[ \t]*(.*)$/) {
 	    $h->{commit}->{sha} = $1;
@@ -84,7 +94,7 @@ sub new {
     $h->{repo} = $repo;
     my $tformat;
     if ($do_just_shas) {
-	$tformat = "* $repo: %s %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,1,1)%b%n%w(0,0,0)";
+	$tformat = "* $repo: %s %h by %an at %ci%n..Committer:%cn <%ce>CommitDate:%ci%n..Author:%an <%ae>%n..AuthorDate:%ai%nSHA:%H%n..%N%n..%s%n%w(0,1,1)%b%n%w(0,0,0)";
     } else {
 	$tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
     }
@@ -142,7 +152,7 @@ while(1) {
 	if ($do_just_shas) {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
-	    print "--apply=" . $entry->{sha} . " --apply-repo=" . $repo . (defined($commit_msg) ? " --commit-message-file=$commit_msg":"") . "\n";
+	    print "--apply=" . $entry->{sha} . " --apply-repo=" . $repo . (defined($commit_msg) ? " --commit-message-file=$commit_msg":"") . " --commit-commitdate='" . $entry->{commitdate} . "' --commit-authordate='".$entry->{authordate}."' --commit-committer='".$entry->{committer}."' --commit-author='" . $entry->{author} . "'\n";
 	} else {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
