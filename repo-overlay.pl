@@ -306,7 +306,6 @@ for my $repo (@repos) {
 	%diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
     } else {
 	%diffstat = reverse split(/\0/, `git diff $oldhead..$head --name-status -z`);
-	die "empty diffstat" unless scalar(keys %diffstat);
     }
 
     for my $path (keys %diffstat) {
