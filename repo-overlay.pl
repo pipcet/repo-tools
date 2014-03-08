@@ -209,6 +209,21 @@ sub revparse {
     }
 }
 
+sub git_parents {
+    my ($commit) = @_;
+
+    my $i = 1;
+    my $p;
+    my @res;
+
+    while (defined($p = revparse("$commit^$i"))) {
+	push @res, $p;
+	$i++;
+    }
+
+    return @res;
+}
+
 if ($do_print_range and defined($apply_repo)) {
     chdir($pwd);
     chdir($apply_repo);
@@ -223,11 +238,7 @@ if (defined($apply) and defined($apply_repo)) {
     my $repo = $apply_repo;
     chdir($repo);
     # XXX octopus merges are broken. How do I find out how many parents a commit has?
-    if (revparse($apply . "^") eq $version{$repo}) {
-	warn "should be able to apply commit $apply to $apply_repo.";
-    } elsif (revparse($apply . "^2") eq $version{$repo}) {
-	warn "should be able to apply commit $apply to $apply_repo.";
-    } elsif (revparse($apply . "^3") eq $version{$repo}) {
+    if (grep { $_ eq $version{$repo} } git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
 	my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
@@ -320,9 +331,7 @@ for my $repo (@repos) {
     my $oldhead = $head;
 
     if (defined($apply)) {
-	if (revparse($apply . "^") eq $head or
-	    revparse($apply . "^2") eq $head or
-	    revparse($apply . "^3") eq $head) {
+	if (grep { $_ eq $head } git_parents($apply)) {
 	    $head = $apply;
 	    warn "successfully applied $apply to $repo";
 	    $apply_success = 1;
