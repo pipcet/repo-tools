@@ -133,9 +133,6 @@ sub cat_file {
     nsystem("(cd $pwd/$repo; git cat-file blob '$branch':'$file') > $dst") or die;
 }
 
-my %dirchanged;
-$dirchanged{"."} = 1;
-
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay");
 
@@ -174,14 +171,14 @@ unless ($do_new_symlinks) {
     for my $dir (@dirs) {
 	$dir =~ s/^\.\///;
 	$dir =~ s/\/*$//;
-	$dirchanged{$dir} = 1;
+	store_item({abs=>$dir, changed=>1});
     }
 
     my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
 
     for my $file (@files) {
 	$file =~ s/\/*$//;
-	$dirchanged{$file} = 1;
+	store_item({abs=>$file, changed=>1});
     }
 
     chdir($pwd);
@@ -337,19 +334,19 @@ for my $repo (@repos) {
 	if ($stat eq "M") {
 	    $status{$repo.$path} = " M";
 	    for my $pref (prefixes($repo . $path)) {
-		$dirchanged{$pref} = 1;
+		store_item({abs=>$pref, changed=>1});
 	    }
 	} elsif ($stat eq "A") {
 	    $status{$repo.$path} = "??";
 	    my $oldtype = "none";
 	    store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"});
 	    for my $pref (prefixes($repo . $path)) {
-		$dirchanged{$pref} = 1;
+		store_item({abs=>$pref, changed=>1});
 	    }
 	} elsif ($stat eq "D") {
 	    $status{$repo.$path} = " D";
 	    for my $pref (prefixes($repo . $path)) {
-		$dirchanged{$pref} = 1;
+		store_item({abs=>$pref, changed=>1});
 	    }
 	} else {
 	    die "$stat $path";
@@ -373,7 +370,7 @@ for my $repo (@repos) {
 		$status{$repo.$extra} = "??";
 		store_item({abs=>$repo.$extra, oldtype=>"none", repo=>$repo, status=>"??"});
 		for my $pref (prefixes($repo . $extra)) {
-		    $dirchanged{$pref} = 1;
+		    store_item({abs=>$pref, changed=>1});
 		}
 	    }
 	}
@@ -387,7 +384,7 @@ for my $repo (@repos) {
 	    $status eq " M" or
 	    $status eq " D") {
 	    for my $pref (prefixes($repo . $path)) {
-		$dirchanged{$pref} = 1;
+		store_item({abs=>$pref, changed=>1});
 	    }
 	} elsif ($status eq "!!") {
 	    # nothing
@@ -397,14 +394,14 @@ for my $repo (@repos) {
     }
     }
 
-    next unless $dirchanged{$repo =~ s/\/$//r};
+    next unless $items{$repo =~ s/\/$//r}{changed};
     warn "lstree $repo\n";
 
     my @lstree_lines = split(/\0/, `git ls-tree -r '$head' -z`);
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
-	next unless $dirchanged{dirname($m->{path})};
+	next unless $items{dirname($m->{path})}{changed};
 	if ($m->{extmode} eq "120") {
 	    store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
@@ -440,7 +437,7 @@ for my $item (values %items) {
 chdir($outdir);
 for my $item (values %items) {
     my $abs = $item->{abs};
-    next unless $dirchanged{dirname($abs)};
+    next unless $items{dirname($abs)}{changed};
     my $rel = $item->{rel};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
@@ -452,11 +449,11 @@ for my $item (values %items) {
 
 	die if $dir eq ".";
 	my $dirname = $dir;
-	while(!$dirchanged{$dirname}) {
+	while(!$items{$dirname}{changed}) {
 	    ($dir, $dirname) = ($dirname, dirname($dirname));
 	}
 
-	if (!$dirchanged{$dir}) {
+	if (!$items{$dir}{changed}) {
 	    if (! (-e "import/$dir" || -l "import/$dir")) {
 		symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
 	    }
@@ -467,11 +464,11 @@ for my $item (values %items) {
 
 	die if $dir eq ".";
 	my $dirname = $dir;
-	while(!$dirchanged{$dirname}) {
+	while(!$items{$dirname}{changed}) {
 	    ($dir, $dirname) = ($dirname, dirname($dirname));
 	}
 
-	if (!$dirchanged{$dir}) {
+	if (!$items{$dir}{changed}) {
 	    if (! (-e "export/$dir" || -l "export/$dir")) {
 		symlink_relative("$outdir/repo-overlay/$dir", "export/$dir") or die;
 	    }
@@ -483,7 +480,7 @@ for my $item (values %items) {
 	my $dirname = dirname($file);
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
-	next unless $dirchanged{$fullpath};
+	next unless $items{$fullpath}{changed};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
@@ -502,7 +499,7 @@ for my $item (values %items) {
 	my $dirname = dirname($file);
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
-	next unless $dirchanged{$fullpath};
+	next unless $itesm{$fullpath}{changed};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
@@ -521,7 +518,7 @@ for my $item (values %items) {
 	my $dirname = dirname($file);
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
-	next unless $dirchanged{$fullpath};
+	next unless $items{$fullpath}{changed};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
@@ -536,7 +533,7 @@ for my $item (values %items) {
 	my $dirname = dirname($file);
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
-	next unless $dirchanged{$fullpath};
+	next unless $items{$fullpath}{changed};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
