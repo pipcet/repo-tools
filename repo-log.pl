@@ -4,11 +4,20 @@ use Getopt::Long qw(:config auto_version auto_help);
 
 my $do_just_shas;
 my $commit_dir;
+my $since_date = "2.months.ago";
+my @repos;
+my $range;
 
 GetOptions(
     "just-shas!" => \$do_just_shas,
     "commit-dir=s" => \$commit_dir,
+    "since=s" => \$since_date,
+    "repo=s" => \@repos,
+    "range=s" => \$range,
     );
+
+@repos = split(/,/, join(",", @repos));
+map { chomp; s/\/*$/\//; s/^\.\///; } @repos;
 
 package RepoStream;
 
@@ -98,16 +107,18 @@ sub new {
     } else {
 	$tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
     }
-    open($h->{fh}, "(cd '$repo'; git log -p -m --first-parent --pretty=tformat:'$tformat' --since='5 weeks ago' --date=iso)|") or die;
+    open($h->{fh}, "(cd '$repo'; git log -p --sparse --full-history --pretty=tformat:'$tformat' --since='$since_date' --date=iso $range)|") or die;
 
     return bless($h, $class);
 }
 
 package main;
 
-my @repos = split(/\0/, `find  -name '.git' -print0 -o -name '.repo' -prune -o -path './out' -prune`);
+if (!@repos) {
+    @repos = split(/\0/, `find  -name '.git' -print0 -o -name '.repo' -prune -o -path './out' -prune`);
+}
 #pop(@repos);
-unshift @repos, (".repo/repo/", ".repo/manifests/");
+#unshift @repos, (".repo/repo/", ".repo/manifests/");
 map { chomp; s/\.git$//; s/^\.\///; } @repos;
 
 my %r;
