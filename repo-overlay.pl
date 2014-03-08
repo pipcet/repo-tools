@@ -270,6 +270,8 @@ if (defined($apply) and defined($apply_repo) and
     @repos = repos();
 }
 my %repos;
+store_item({abs=>"", changed=>1});
+store_item({abs=>".", changed=>1});
 for my $repo (@repos) {
     $repos{$repo} = { repo=>$repo };
     chdir($pwd);
