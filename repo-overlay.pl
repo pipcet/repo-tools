@@ -181,17 +181,6 @@ open $version_fh, ">>$outdir/versions/versions.txt";
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay");
 
-my %dirchanged;
-$dirchanged{"."} = 1;
-
-unless ($do_new_symlinks) {
-    my @dirs = split(/\0/, `find $outdir/import -name .git -prune -o -type d -print0`);
-
-    for my $dir (@dirs) {
-	$dirchanged{$dir} = 1;
-    }
-}
-
 my %oldtype;
 my %newtype;
 my %status;
@@ -235,9 +224,10 @@ sub previous_commit {
 
 sub revparse {
     my ($head) = @_;
-    my $last = `git rev-parse '$head'`;
+    my $last = `git rev-parse '$head' 2>/dev/null`;
     chomp($last);
-    if ($last =~ /~1$/) {
+    if ($last =~ /~1$/ or
+	length($last) < 10) {
 	return undef;
     } else {
 	return $last;
@@ -263,18 +253,21 @@ for my $repo (@repos) {
     $repos{$repo} = { repo=>$repo };
     chdir($pwd);
     chdir($repo);
-    my $head = `git rev-parse '$branch'`;
-    $head = `git rev-parse HEAD` if ($head eq "\n");
+    my $head;
+    if ($do_new_symlinks) {
+	$head = revparse($branch) // revparse("HEAD");
+    } else {
+	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
+    }
     chomp($head);
-    $repos{$repo}{head} = $head;
 
     if (defined($apply)) {
-	if (nsystem("git rev-parse $apply -- 2>/dev/null")) {
-	    if (`git rev-parse $apply'^' --` eq "$head\n") {
-		$head = $apply;
-	    }
+	if (revparse($apply . "^") eq "$head\n") {
+	    $head = $apply;
+	    warn "successfully applied $apply to $repo";
 	}
     }
+    $repos{$repo}{head} = $head;
 
     if (!defined($rversion{$head}) or
 	$head ne $version{$repo}) {
@@ -318,24 +311,34 @@ for my $repo (@repos) {
 
     store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
 
-    warn "repo $repo head $head";
     my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
 
-	warn "$stat $path";
-
 	if ($stat eq "M") {
+	    $status{$repo.$path} = " M";
+	    for my $pref (prefixes($repo . $path)) {
+		$dirchanged{$pref} = 1;
+	    }
 	} elsif ($stat eq "A") {
+	    $status{$repo.$path} = "??";
 	    my $oldtype = "none";
 	    store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"});
+	    for my $pref (prefixes($repo . $path)) {
+		$dirchanged{$pref} = 1;
+	    }
 	} elsif ($stat eq "D") {
+	    $status{$repo.$path} = " D";
+	    for my $pref (prefixes($repo . $path)) {
+		$dirchanged{$pref} = 1;
+	    }
 	} else {
 	    die "$stat $path";
 	}
     }
-    
+
+    if (0) {
     my @porc_lines = split(/\0/, `git status --ignored -z`);
 
     my @porc = map { /^(.)(.) (.*)$/; { a => $1, b => $2, path => $3 } } @porc_lines;
@@ -374,8 +377,10 @@ for my $repo (@repos) {
 	    die "unknown status $status in repo $repo, path " . $p->{path};
 	}
     }
+    }
 
-    next unless scalar(@porc);
+    next unless $dirchanged{$repo =~ s/\/$//r};
+    warn "lstree $repo\n";
 
     my @lstree_lines = split(/\0/, `git ls-tree -r '$head' -z`);
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
