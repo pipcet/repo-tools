@@ -74,6 +74,8 @@ sub copy_or_hardlink {
 
 my $do_new_versions;
 my $do_new_symlinks;
+my $do_print_range;
+
 my $apply;
 my $apply_repo;
 my $apply_success;
@@ -94,6 +96,7 @@ GetOptions(
     "out=s" => \$outdir,
     "in=s" => \$indir,
     "branch=s" => \$branch,
+    "print-range!" => \$do_print_range,
     "new-versions!" => \$do_new_versions,
     "new-symlinks!" => \$do_new_symlinks,
     "apply=s" => \$apply,
@@ -204,6 +207,14 @@ sub revparse {
     } else {
 	return $last;
     }
+}
+
+if ($do_print_range and defined($apply_repo)) {
+    chdir($pwd);
+    chdir($apply_repo);
+    print "$version{$apply_repo}.." . revparse("HEAD") . "\n";
+
+    exit(0);
 }
 
 if (defined($apply) and defined($apply_repo)) {
