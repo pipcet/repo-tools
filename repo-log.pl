@@ -3,9 +3,11 @@
 use Getopt::Long qw(:config auto_version auto_help);
 
 my $do_just_shas;
+my $commit_dir;
 
 GetOptions(
-    "just-shas!"=>\$do_just_shas,
+    "just-shas!" => \$do_just_shas,
+    "commit-dir=s" => \$commit_dir,
     );
 
 package RepoStream;
@@ -108,10 +110,32 @@ while(1) {
     my @dates = sort { $b->[0] <=> $a->[0] } map { [$_->[0]{rawdate}, $_->[0], $_->[1]] } grep { defined($_->[0]) } map { [$_->peek, $_] } values(%r);
 
     if (scalar(@dates)) {
+	my $commit_msg = undef;
+
+	if (defined($commit_dir)) {
+	    system("mkdir -p '$commit_dir'");
+
+	    my $repo = $dates[0][2]->{repo};
+	    my $entry = $dates[0][2]->peek;
+	    $commit_msg = "$commit_dir/" . $entry->{sha};
+	    my $raw = $entry->{content};
+	    my $cooked = $raw;
+	    $cooked =~ s/^(diff --git a\/([^ \t]*))/\*\* $repo$2\n$1/msg;
+	    $cooked =~ s/\n+\*\*/\n\*\*/msg;
+	    $cooked =~ s/^\.\.\n//msg;
+	    my $l;
+	    if (($l = length($cooked)) > 10000) {
+		$cooked = substr($cooked, 0, 10000) . "\n" . ($l-10000) . " bytes skipped\n"
+	    }
+	    open $fh, ">$commit_msg";
+	    print $fh $cooked;
+	    close $fh;
+	}
+
 	if ($do_just_shas) {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
-	    print "--apply=" . $entry->{sha} . " --apply-repo=" . $repo . "\n";
+	    print "--apply=" . $entry->{sha} . " --apply-repo=" . $repo . (defined($commit_msg) ? " --commit-message-file=$commit_msg":"") . "\n";
 	} else {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
