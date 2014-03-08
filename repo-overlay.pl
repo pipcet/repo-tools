@@ -51,8 +51,6 @@ sub prefixes {
 sub nsystem {
     my ($cmd) = @_;
 
-    warn "running $cmd\n";
-
     return !system($cmd);
 }
 
@@ -166,27 +164,6 @@ sub store_item {
     }
 }
 
-unless ($do_new_symlinks) {
-    chdir("$outdir/import");
-    my @dirs = split(/\0/, `find -name .git -prune -o -type d -print0`);
-
-    for my $dir (@dirs) {
-	$dir =~ s/^\.\///;
-	$dir =~ s/\/*$//;
-	store_item({abs=>$dir, changed=>1});
-    }
-
-    my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
-
-    for my $file (@files) {
-	$file =~ s/^\.\///;
-	$file =~ s/\/*$//;
-	store_item({abs=>$file, changed=>1});
-    }
-
-    chdir($pwd);
-}
-
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 
@@ -243,10 +220,45 @@ if (defined($apply) and defined($apply_repo)) {
     my $repo = $apply_repo;
     chdir($repo);
     if (revparse($apply . "^") eq $version{$repo}) {
-	warn "should be able to apply patch $apply to $apply_repo.";
+	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
-	die "cannot apply patch $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^");
+	my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
+	$msg .= " repo ancestors:\n";
+	$msg .= "".revparse($version{$repo}."")."\n";
+	$msg .= "".revparse($version{$repo}."~1")."\n";
+	$msg .= "".revparse($version{$repo}."~2")."\n";
+	$msg .= "".revparse($version{$repo}."~3")."\n";
+	$msg .= "".revparse($version{$repo}."~4")."\n";
+	$msg .= " commit ancestors:\n";
+	$msg .= "".revparse($apply."")."\n";
+	$msg .= "".revparse($apply."~1")."\n";
+	$msg .= "".revparse($apply."~2")."\n";
+	$msg .= "".revparse($apply."~3")."\n";
+	$msg .= "".revparse($apply."~4")."\n";
+
+	die($msg);
     }
+    chdir($pwd);
+}
+
+unless ($do_new_symlinks) {
+    chdir("$outdir/import");
+    my @dirs = split(/\0/, `find -name .git -prune -o -type d -print0`);
+
+    for my $dir (@dirs) {
+	$dir =~ s/^\.\///;
+	$dir =~ s/\/*$//;
+	store_item({abs=>$dir, changed=>1});
+    }
+
+    my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
+
+    for my $file (@files) {
+	$file =~ s/^\.\///;
+	$file =~ s/\/*$//;
+	store_item({abs=>$file, changed=>1});
+    }
+
     chdir($pwd);
 }
 
@@ -480,9 +492,7 @@ nsystem("ln -s $pwd $outdir/repo-overlay");
 
 if (defined($commit_message_file)) {
     chdir("$outdir/import");
-    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date
-    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date
-    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date
+    nsystem("git add --all; git commit -F $commit_message_file"); #XXX --date  
 }
 
 # useful commands:
