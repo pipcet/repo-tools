@@ -158,6 +158,7 @@ sub store_item {
 	    $olditem->{$key} = $item->{$key};
 	}
 	$olditem->{repo} = $repo;
+	$olditem->{rel} = substr($olditem->{abs}, length($repo));
     } else {
 	$items{$item->{abs}} = $item;
     }
@@ -393,7 +394,17 @@ for my $repo (@repos) {
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
+	warn $m->{path} . " " . $m->{extmode} . "\n";
+	my ($dir, $entry) = ($m->{path}, $m->{path});
+	until ($items{$dir}{changed}) {
+	    ($dir,$entry) = (dirname($dir),$dir);
+	}
+	for my $pref (prefixes($entry)) {
+	    last if length($pref) < length($repo);
+	    store_item({oldtype=>"dir", abs=>$pref, repo=>$repo});
+	}
 	next unless $items{dirname($m->{path})}{changed};
+
 	if ($m->{extmode} eq "120") {
 	    store_item({oldtype=>"link", abs=>$m->{path}, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
@@ -429,6 +440,7 @@ for my $item (values %items) {
 chdir($outdir);
 for my $item (values %items) {
     my $abs = $item->{abs};
+    next if $abs eq "" or $abs eq ".";
     next unless $items{dirname($abs)}{changed};
     my $rel = $item->{rel};
     my $type = $item->{newtype};
