@@ -181,6 +181,7 @@ unless ($do_new_symlinks) {
     my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
 
     for my $file (@files) {
+	$file =~ s/^\.\///;
 	$file =~ s/\/*$//;
 	store_item({abs=>$file, changed=>1});
     }
