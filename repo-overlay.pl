@@ -94,6 +94,7 @@ my $do_new_versions;
 my $do_new_symlinks;
 my $apply;
 my $apply_repo;
+my $apply_success;
 
 my $outdir;
 my $indir = ".";
@@ -213,9 +214,6 @@ while (<$version_fh>) {
 }
 close $version_fh;
 
-open $version_fh, ">>$outdir/versions/versions.txt";
-
-
 sub previous_commit {
     my ($head) = @_;
     my $last = `git rev-parse '$head~1'`;
@@ -289,13 +287,13 @@ for my $repo (@repos) {
 	if (revparse($apply . "^") eq "$head") {
 	    $head = $apply;
 	    warn "successfully applied $apply to $repo";
+	    $apply_success = 1;
 	}
     }
     $repos{$repo}{head} = $head;
 
     if (!defined($rversion{$head}) or
 	$head ne $version{$repo}) {
-	print $version_fh "$repo: $head\n";
     } elsif ($version{$rversion{$head}} ne $head) {
 	die "version mismatch";
     }
@@ -471,6 +469,12 @@ for my $item (values %items) {
 }
 
 chdir($pwd);
+
+if ($apply_success) {
+    open $version_fh, ">>$outdir/versions/versions.txt";
+    print $version_fh "$apply_repo: $apply\n";
+    close $version_fh;
+}
 
 copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
 copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
