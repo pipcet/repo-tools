@@ -95,6 +95,7 @@ sub copy_or_hardlink {
 my $do_new_versions;
 my $do_new_symlinks;
 my $apply;
+my $apply_repo;
 
 my $outdir;
 my $indir = ".";
@@ -109,7 +110,11 @@ GetOptions(
     "new-versions!" => \$do_new_versions,
     "new-symlinks!" => \$do_new_symlinks,
     "apply=s" => \$apply,
-    );
+    "apply-repo=s" => \$apply_repo,
+    ) or die;
+
+$apply_repo =~ s/\/*$/\//;
+$apply_repo =~ s/^\.\///;
 
 $outdir =~ s/\/*$//;
 $indir =~ s/\/*$//;
@@ -125,6 +130,22 @@ sub cat_file {
     mkdirp(dirname($dst)) or die;
 
     nsystem("(cd $pwd/$repo; git cat-file blob '$branch':'$file') > $dst") or die;
+}
+
+my %dirchanged;
+$dirchanged{"."} = 1;
+
+unless ($do_new_symlinks) {
+    chdir("$outdir/import");
+    my @dirs = split(/\0/, `find -name .git -prune -o -type d -print0`);
+
+    for my $dir (@dirs) {
+	$dir =~ s/^\.\///;
+	$dir =~ s/\/*$//;
+	$dirchanged{$dir} = 1;
+    }
+
+    chdir($pwd);
 }
 
 nsystem("rm -rf $outdir/import/*");
@@ -221,6 +242,19 @@ sub revparse {
     } else {
 	return $last;
     }
+}
+
+if (defined($apply) and defined($apply_repo)) {
+    die if $apply eq "";
+
+    my $repo = $apply_repo;
+    chdir($repo);
+    if (revparse($apply . "^") eq $version{$repo}) {
+	warn "should be able to apply patch $apply to $apply_repo.";
+    } else {
+	die "cannot apply patch $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^");
+    }
+    chdir($pwd);
 }
 
 my @repos = repos();
@@ -505,3 +539,5 @@ nsystem("ln -sv $pwd $outdir/repo-overlay");
 #  repo-overlay.pl -- sync repository to export/ import/
 #  diff -ur repo-overlay/ export/|(cd repo-overlay; patch -p1) -- sync export/ to repository (doesn't handle new/deleted files)
 #  diff -urNx .git -x .repo -x out -x out-old repo-overlay/ export/|(cd repo-overlay; patch -p1)
+
+exit(0);
