@@ -81,7 +81,7 @@ sub new {
     $h->{n} = 0;
     $h->{repo} = $repo;
     my $tformat;
-    $tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..%N%n..%s%b%n..SHA:%H";
+    $tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(76,6,9)%b%n";
     open($h->{fh}, "(cd '$repo'; git log -p -m --first-parent --pretty=tformat:'$tformat' --since='5 weeks ago' --date=iso)|") or die;
 
     return bless($h, $class);
@@ -114,7 +114,8 @@ while(1) {
 	    print "--apply=" . $entry->{sha} . " --apply-repo=" . $repo . "\n";
 	} else {
 	    my $repo = $dates[0][2]->{repo};
-	    my $raw = $dates[0][2]->get->{content};
+	    my $entry = $dates[0][2]->get;
+	    my $raw = $entry->{content};
 	    my $cooked = $raw;
 	    $cooked =~ s/^(diff --git a\/([^ \t]*))/\*\* $repo$2\n$1/msg;
 	    $cooked =~ s/\n+\*\*/\n\*\*/msg;
