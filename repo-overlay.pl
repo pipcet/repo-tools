@@ -439,20 +439,12 @@ for my $item (values %items) {
     }
     if ($oldtype eq "link") {
 	my $file = $rel;
-	warn "link $file $repo $abs";
-	my $dirname = dirname($file);
-	my $fullpath = $repo . $dirname;
-	$fullpath =~ s/\/\.$//;
-	next unless $items{$fullpath}{changed};
+
 	symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
     }
     if ($type eq "link") {
 	my $file = $rel;
-	warn "link $file";
-	my $dirname = dirname($file);
-	my $fullpath = $repo . $dirname;
-	$fullpath =~ s/\/\.$//;
-	next unless $items{$fullpath}{changed};
+
 	copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
     }
 }
