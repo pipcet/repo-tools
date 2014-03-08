@@ -83,7 +83,11 @@ sub new {
     $h->{n} = 0;
     $h->{repo} = $repo;
     my $tformat;
-    $tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
+    if ($do_just_shas) {
+	$tformat = "* $repo: %s %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,1,1)%b%n%w(0,0,0)";
+    } else {
+	$tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
+    }
     open($h->{fh}, "(cd '$repo'; git log -p -m --first-parent --pretty=tformat:'$tformat' --since='5 weeks ago' --date=iso)|") or die;
 
     return bless($h, $class);
@@ -93,7 +97,8 @@ package main;
 
 my @repos = split(/\0/, `find  -name '.git' -print0 -o -name '.repo' -prune -o -path './out' -prune`);
 #pop(@repos);
-map { chomp; s/\.git$// } @repos;
+unshift @repos, (".repo/repo/", ".repo/manifests/");
+map { chomp; s/\.git$//; s/^\.\///; } @repos;
 
 my %r;
 warn scalar(@repos) . " repos\n";
@@ -120,9 +125,11 @@ while(1) {
 	    $commit_msg = "$commit_dir/" . $entry->{sha};
 	    my $raw = $entry->{content};
 	    my $cooked = $raw;
+	    $cooked =~ s/^\* *//msg;
 	    $cooked =~ s/^(diff --git a\/([^ \t]*))/\*\* $repo$2\n$1/msg;
 	    $cooked =~ s/\n+\*\*/\n\*\*/msg;
 	    $cooked =~ s/^\.\.\n//msg;
+	    $cooked =~ s/^\.\.//msg;
 	    my $l;
 	    if (($l = length($cooked)) > 10000) {
 		$cooked = substr($cooked, 0, 10000) . "\n" . ($l-10000) . " bytes skipped\n"
