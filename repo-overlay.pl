@@ -280,39 +280,6 @@ for my $repo (@repos) {
     } elsif ($version{$rversion{$head}} ne $head) {
 	die "version mismatch";
     }
-    if (0) {
-	my $branch = "dirty"; chomp($branch); # XXX
-	my $remote = `git config --get branch.$branch.remote`; chomp($remote);
-	my $url = `git config --get remote.$remote.url`; chomp($url);
-	warn "$repo $branch $remote $url";
-	my @heads;
-	my @commits;
-	for (my $i = 0; ; $i++) {
-	    my $h = revparse("\@{$i}");
-	    last unless $h;
-	    last if $h eq $version{$repo};
-	    last if $#heads>10;
-	    last if $h =~ /\~1$/;
-	    push @heads, $h;
-	    my $commit = `git log --date=iso $h $h'^'`;
-	    if ($url =~ /^(https?|git):\/\/(github.com\/.*)$/) {
-		$commit = "http://$2/commit/$h\n\n" . $commit;
-	    }
-	    push @commits, $commit;
-	}
-	my $first = $heads[$#heads];
-
-	if (scalar(@commits)) {
-	    my $cmsg = "merged commits in $repo:\n\n";
-	    $cmsg .= "see $url\n\n";
-	    $cmsg .= join("\n\n", @commits);
-
-	    my $cmsg_fh;
-	    open $cmsg_fh, ">>$outdir/versions/cmsg/$first..$head";
-	    print $cmsg_fh $cmsg;
-	    close $cmsg_fh;
-	}
-    }
 
     store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
 
@@ -347,46 +314,6 @@ for my $repo (@repos) {
 	}
     }
 
-    if (0) {
-    my @porc_lines = split(/\0/, `git status --ignored -z`);
-
-    my @porc = map { /^(.)(.) (.*)$/; { a => $1, b => $2, path => $3 } } @porc_lines;
-    
-    for my $p (@porc) {
-	my $path = $p->{path};
-	store_item({abs=>$repo.$path, status=>$p->{a} . $p->{b}});
-	my $status = $items{$repo.$path}{status};
-
-	if ($status eq "??" and $path =~ /\/$/) {
-	    my @extra = split(/\0/, `find $path -name '.git' -prune -o -print0`);
-	    map { s/\/*$//; } @extra;
-
-	    for my $extra (@extra) {
-		store_item({abs=>$repo.$extra, oldtype=>"none", repo=>$repo, status=>"??"});
-		for my $pref (prefixes($repo . $extra)) {
-		    store_item({abs=>$pref, changed=>1});
-		}
-	    }
-	}
-
-	$path =~ s/\/$//;
-	store_item({abs=>$repo.$path, status=>$status});
-	store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"}) if $status eq "??";
-
-	if ($status eq "??" or
-	    $status eq " M" or
-	    $status eq " D") {
-	    for my $pref (prefixes($repo . $path)) {
-		store_item({abs=>$pref, changed=>1});
-	    }
-	} elsif ($status eq "!!") {
-	    # nothing
-	} else {
-	    die "unknown status $status in repo $repo, path " . $p->{path};
-	}
-    }
-    }
-
     next unless $items{$repo =~ s/\/$//r}{changed};
     warn "lstree $repo\n";
 
@@ -411,11 +338,6 @@ for my $repo (@repos) {
 	    store_item({oldtype=>"file", abs=>$m->{path}, repo=>$repo});
 	} else {
 	    die "unknown mode";
-	}
-
-	for my $pref (prefixes($m->{path})) {
-	    last if length($pref) < length($repo);
-	    store_item({oldtype=>"dir", abs=>$pref, repo=>$repo});
 	}
     }
 }
