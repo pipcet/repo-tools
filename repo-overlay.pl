@@ -260,7 +260,7 @@ if (defined($apply) and defined($apply_repo) and
 } else {
     @repos = repos();
 }
-
+my %repos;
 for my $repo (@repos) {
     $repos{$repo} = { repo=>$repo };
     chdir($pwd);
