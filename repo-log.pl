@@ -83,7 +83,7 @@ sub new {
     $h->{n} = 0;
     $h->{repo} = $repo;
     my $tformat;
-    $tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(76,6,9)%b%n";
+    $tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
     open($h->{fh}, "(cd '$repo'; git log -p -m --first-parent --pretty=tformat:'$tformat' --since='5 weeks ago' --date=iso)|") or die;
 
     return bless($h, $class);
