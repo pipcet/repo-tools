@@ -351,8 +351,6 @@ for my $repo (@repos) {
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
-	warn $m->{path} . " " . $m->{extmode} . "\n";
-
 	next unless $items{dirname($m->{path})} and $items{dirname($m->{path})}{changed};
 
 	if ($m->{extmode} eq "120") {
