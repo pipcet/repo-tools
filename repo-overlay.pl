@@ -96,7 +96,7 @@ sub copy_or_hardlink {
 my $outdir;
 my $indir = ".";
 
-my $branch = "HEAD";
+my $branch = '@{1.month.ago}';
 
 GetOptions(
     "hardlink!" => \$do_hardlink,
@@ -114,7 +114,7 @@ my $pwd = `pwd`;
 chomp($pwd);
 
 sub cat_file {
-    my ($repo, $file, $dst) = @_;
+    my ($repo, $branch, $file, $dst) = @_;
 
     mkdirp(dirname($dst)) or die;
 
@@ -205,11 +205,15 @@ sub revparse {
 }
 
 my @repos = repos();
+my %repos;
 for my $repo (@repos) {
+    $repos{$repo} = { repo=>$repo };
     chdir($pwd);
     chdir($repo);
     my $head = `git rev-parse '$branch'`;
+    $head = `git rev-parse HEAD` if ($head eq "\n");
     chomp($head);
+    $repos{$repo}{head} = $head;
 
     if (!defined($rversion{$head}) or
 	$head ne $version{$repo}) {
@@ -252,6 +256,24 @@ for my $repo (@repos) {
     }
 
     store_item({abs=>$repo, oldtype=>"dir", repo=>$repo});
+
+    warn "repo $repo head $head";
+    my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+
+    for my $path (keys %diffstat) {
+	my $stat = $diffstat{$path};
+
+	warn "$stat $path";
+
+	if ($stat eq "M") {
+	} elsif ($stat eq "A") {
+	    my $oldtype = "none";
+	    store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"});
+	} elsif ($stat eq "D") {
+	} else {
+	    die "$stat $path";
+	}
+    }
     
     my @porc_lines = split(/\0/, `git status --ignored -z`);
 
@@ -294,7 +316,7 @@ for my $repo (@repos) {
 
     next unless scalar(@porc);
 
-    my @lstree_lines = split(/\0/, `git ls-tree -r '$branch' -z`);
+    my @lstree_lines = split(/\0/, `git ls-tree -r '$head' -z`);
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repo.$5 } } @lstree_lines;
 
     for my $m (@modes) {
@@ -337,6 +359,7 @@ for my $item (values %items) {
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
     my $repo = $item->{repo};
+    my $head = $repos{$repo}{head};
 
     if ($oldtype eq "dir") {
 	my $dir = $abs;
@@ -380,9 +403,9 @@ for my $item (values %items) {
 	    symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
 	} elsif ($status eq "??") {
 	} elsif ($status eq " M") {
-	    cat_file($repo, $file, "import/$repo$file");
+	    cat_file($repo, $head, $file, "import/$repo$file");
 	} elsif ($status eq " D") {
-	    cat_file($repo, $file, "import/$repo$file");
+	    cat_file($repo, $head, $file, "import/$repo$file");
 	} else {
 	    die "unknown status $status for $repo$file";
 	}
@@ -415,7 +438,7 @@ for my $item (values %items) {
 	next unless $dirchanged{$fullpath};
 	my $status = $status{$repo . $file};
 	if (!defined($status)) {
-	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$branch':'$file')`, "import/$repo$file") or die;
+	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
 	} elsif ($status eq "??") {
 	} else {
 	    die "unknown status $status for $repo$file";
