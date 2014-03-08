@@ -79,7 +79,7 @@ sub symlink_absolute {
 
     mkdirp(dirname($dst)) or die;
 
-    nsystem("ln -sv '$src' '$dst'") or die;
+    symlink($src, $dst) or die;
 }
 
 sub copy_or_hardlink {
