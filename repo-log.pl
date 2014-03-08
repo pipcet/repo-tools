@@ -94,7 +94,7 @@ sub new {
     $h->{repo} = $repo;
     my $tformat;
     if ($do_just_shas) {
-	$tformat = "* $repo: %s %h by %an at %ci%n..Committer:%cn <%ce>CommitDate:%ci%n..Author:%an <%ae>%n..AuthorDate:%ai%nSHA:%H%n..%N%n..%s%n%w(0,1,1)%b%n%w(0,0,0)";
+	$tformat = "* $repo: %s %h by %an at %ci%n..Committer:%cn <%ce>%nCommitDate:%ci%n..Author:%an <%ae>%n..AuthorDate:%ai%n..SHA:%H%n..%N%n..%s%n%w(0,1,1)%b%n%w(0,0,0)";
     } else {
 	$tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
     }
