@@ -451,9 +451,11 @@ for my $item (values %items) {
 
 chdir($pwd);
 
-if ($apply_success) {
+if ($apply_success or $do_new_versions) {
     open $version_fh, ">>$outdir/versions/versions.txt";
-    print $version_fh "$apply_repo: $apply\n";
+    for my $repo (@repos) {
+	print $version_fh "$repo: $apply\n";
+    }
     close $version_fh;
 }
 
