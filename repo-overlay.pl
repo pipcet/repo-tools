@@ -332,19 +332,19 @@ for my $repo (@repos) {
 	my $stat = $diffstat{$path};
 
 	if ($stat eq "M") {
-	    $status{$repo.$path} = " M";
+	    store_item({abs=>$repo.$path, status=>" M"});
 	    for my $pref (prefixes($repo . $path)) {
 		store_item({abs=>$pref, changed=>1});
 	    }
 	} elsif ($stat eq "A") {
-	    $status{$repo.$path} = "??";
+	    store_item({abs=>$repo.$path, status=>"??"});
 	    my $oldtype = "none";
 	    store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"});
 	    for my $pref (prefixes($repo . $path)) {
 		store_item({abs=>$pref, changed=>1});
 	    }
 	} elsif ($stat eq "D") {
-	    $status{$repo.$path} = " D";
+	    store_item({abs=>$repo.$path, status=>" D"});
 	    for my $pref (prefixes($repo . $path)) {
 		store_item({abs=>$pref, changed=>1});
 	    }
@@ -360,14 +360,14 @@ for my $repo (@repos) {
     
     for my $p (@porc) {
 	my $path = $p->{path};
-	my $status = $status{$repo . $path} = $p->{a} . $p->{b};
+	store_item({abs=>$repo.$path, status=>$p->{a} . $p->{b}});
+	my $status = $items{$repo.$path}{status};
 
 	if ($status eq "??" and $path =~ /\/$/) {
 	    my @extra = split(/\0/, `find $path -name '.git' -prune -o -print0`);
 	    map { s/\/*$//; } @extra;
 
 	    for my $extra (@extra) {
-		$status{$repo.$extra} = "??";
 		store_item({abs=>$repo.$extra, oldtype=>"none", repo=>$repo, status=>"??"});
 		for my $pref (prefixes($repo . $extra)) {
 		    store_item({abs=>$pref, changed=>1});
@@ -376,7 +376,7 @@ for my $repo (@repos) {
 	}
 
 	$path =~ s/\/$//;
-	$status{$repo . $path} = $status;
+	store_item({abs=>$repo.$path, status=>$status);
 	$oldtype{$repo . $path} = "none" if $status eq "??";
 	store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??"}) if $status eq "??";
 
@@ -481,7 +481,7 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $items{$fullpath}{changed};
-	my $status = $status{$repo . $file};
+	my $status = $items{$repo . $file}{status};
 	if (!defined($status)) {
 	    symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
 	} elsif ($status eq "??") {
@@ -500,7 +500,7 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $itesm{$fullpath}{changed};
-	my $status = $status{$repo . $file};
+	my $status = $items{$repo . $file}{status};
 	if (!defined($status)) {
 	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq "??") {
@@ -519,7 +519,7 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $items{$fullpath}{changed};
-	my $status = $status{$repo . $file};
+	my $status = $items{$repo . $file}{status};
 	if (!defined($status)) {
 	    symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
 	} elsif ($status eq "??") {
@@ -534,7 +534,7 @@ for my $item (values %items) {
 	my $fullpath = $repo . $dirname;
 	$fullpath =~ s/\/\.$//;
 	next unless $items{$fullpath}{changed};
-	my $status = $status{$repo . $file};
+	my $status = $items{$repo . $file}{status};
 	if (!defined($status)) {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} elsif ($status eq "??") {
