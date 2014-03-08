@@ -14,23 +14,7 @@ sub repos {
     unshift @repos, ".repo/repo/";
     unshift @repos, ".repo/manifests/";
 
-    # we currently fail horribly if there are actual changes in nested
-    # git repositories. On the android repo, that affects only
-    # chromium_org/, which I'm not touching, for now.
-    my %have;
-    for my $repo (@repos) {
-	$have{$repo} = 1;
-    }
-
-REPO:
-    for my $repo (@repos) {
-	for my $prefix (prefixes($repo)) {
-	    warn "$repo nested in $prefix" if ($have{$prefix."/"});
-	    delete($have{$repo}) if ($have{$prefix."/"});
-	}
-    }
-    
-    return grep { $have{$_} } @repos;
+    return @repos;
 }
 
 # all ancestor directories of a path
