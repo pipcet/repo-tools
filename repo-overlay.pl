@@ -3,7 +3,8 @@ use strict;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
-
+use File::PathConvert qw(abs2rel);
+use File::Copy::Recursive qw(fcopy);
 sub repos {
     my @repos = split(/\0/, `find  -name '.git' -print0 -prune -o -name '.repo' -prune -o -path './out' -prune`);
 #pop(@repos);
@@ -59,19 +60,18 @@ my $do_hardlink;
 sub mkdirp {
     my ($dir) = @_;
 
-    if (-d $dir) {
-	return 1;
-    } else {
-	return nsystem("mkdir -p '$dir'");
-    }
+    make_path($dir);
+
+    return 1;
 }
 
 sub symlink_relative {
     my ($src, $dst) = @_;
+    my $relsrc = abs2rel($src, dirname($dst));
 
     mkdirp(dirname($dst)) or die;
 
-    nsystem("ln -nsrv '$src' '$dst'") or die;
+    symlink($relsrc, $dst) or die;
 }
 
 sub symlink_absolute {
@@ -85,11 +85,9 @@ sub symlink_absolute {
 sub copy_or_hardlink {
     my ($src, $dst) = @_;
 
-    mkdirp(dirname($dst)) or die;
+    fcopy($src, $dst);
 
-    my $hl = $do_hardlink ? "al" : "a";
-
-    return nsystem("cp -v$hl '$src' '$dst'") or die;
+    return 1;
 }
 
 my $do_new_versions;
