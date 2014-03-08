@@ -252,8 +252,10 @@ if ($do_new_symlinks or !defined($apply_repo)) {
     nsystem("rm -rf $outdir/import/.repo");
     nsystem("rm -rf $outdir/export/.repo");
 } else {
-    nsystem("rm -rf $outdir/import/$apply_repo");
-    nsystem("rm -rf $outdir/export/$apply_repo");
+    # rm -rf dangling-symlink/ doesn't delete anything. Learn
+    # something new every day.
+    nsystem("rm -rf $outdir/import/" . ($apply_repo =~ s/\/$//r));
+    nsystem("rm -rf $outdir/export/" . ($apply_repo =~ s/\/$//r));
 }
 
 my @repos;
