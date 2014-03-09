@@ -199,7 +199,7 @@ sub git_walk_tree {
 
 	return;
     }
-x
+
     my @lstree_lines = split(/\0/, `git ls-tree '$head':'$abs' -z`);
 
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $abs.(($abs eq "")?"":"/").$5 } } @lstree_lines;
