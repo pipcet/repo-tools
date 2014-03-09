@@ -128,7 +128,7 @@ if (!@repos) {
     @repos = split(/\0/, `find  -name '.git' -print0 -o -name '.repo' -prune -o -path './out' -prune`);
 }
 #pop(@repos);
-#unshift @repos, (".repo/repo/", ".repo/manifests/");
+unshift @repos, (".repo/repo/", ".repo/manifests/");
 map { chomp; s/\.git$//; s/^\.\///; } @repos;
 
 my %r;
@@ -173,7 +173,7 @@ while(1) {
 	if ($do_just_shas) {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
-	    print "--apply=" . $entry->{sha} . " --apply-repo=" . $repo . (defined($commit_msg) ? " --commit-message-file=$commit_msg":"") . " --commit-commitdate='" . $entry->{commitdate} . "' --commit-authordate='".$entry->{authordate}."' --commit-committer='".$entry->{committer}."' --commit-author='" . $entry->{author} . "'\n";
+	    print "--commit-commitdate='" . $entry->{commitdate} . "' --apply=" . $entry->{sha} . " --apply-repo=" . $repo . (defined($commit_msg) ? " --commit-message-file=$commit_msg":"") . " --commit-authordate='".$entry->{authordate}."' --commit-committer='".$entry->{committer}."' --commit-author='" . $entry->{author} . "'\n";
 	} else {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
