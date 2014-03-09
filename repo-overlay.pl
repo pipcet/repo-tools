@@ -83,7 +83,7 @@ my $apply_success;
 my $outdir;
 my $indir = ".";
 
-my $branch = '@{1.month.ago}';
+my $branch = '@{February.1}';
 my $commit_message_file;
 
 my $commit_commitdate;
@@ -262,7 +262,7 @@ sub revparse {
     my ($head) = @_;
     my $last = `git rev-parse '$head' 2>/dev/null`;
     chomp($last);
-    if ($last =~ /~1$/ or
+    if ($last =~ /[^0-9a-f]/ or
 	length($last) < 10) {
 	return undef;
     } else {
@@ -398,6 +398,7 @@ for my $repo (@repos) {
 	    $apply_success = 1;
 	}
     }
+    $version{$repo} = $head;
     $repos{$repo}{head} = $head;
 
     if (!defined($rversion{$head}) or
@@ -456,14 +457,14 @@ for my $item (values %items) {
 chdir($outdir);
 for my $item (values %items) {
     my $repo = $item->{repo};
-    next unless $repos{$repo};
+    next unless $repos{$repo} or $do_new_symlinks;
     my $abs = $item->{abs};
     next if $abs eq "" or $abs eq ".";
     next unless $items{dirname($abs)}{changed};
     my $rel = $item->{rel};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
-    my $head = $repos{$repo}{head};
+    my $head = $repos{$repo} && $repos{$repo}{head};
 
     if ($oldtype eq "dir") {
 	my $dir = $abs;
@@ -530,7 +531,7 @@ chdir($pwd);
 if ($apply_success or $do_new_versions) {
     open $version_fh, ">>$outdir/versions/versions.txt";
     for my $repo (@repos) {
-	print $version_fh "$repo: $apply\n";
+	print $version_fh "$repo: ".$version{$repo}."\n";
     }
     close $version_fh;
 }
@@ -562,3 +563,7 @@ if (defined($commit_message_file)) {
 # perl ~/repo-tools/repo-log.pl --just-shas|tac|while read; do echo $REPLY; sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay"; done
 
 exit(0);
+
+# Local Variables:
+# eval: (add-hook 'before-save-hook (quote whitespace-cleanup))
+# End:
