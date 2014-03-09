@@ -405,6 +405,8 @@ for my $repo (@repos) {
     $repos{$repo} = { repo=>$repo };
     chdir($pwd);
     chdir($repo);
+    my $branch = `git log -1 --reverse --pretty=oneline --until='February 1'|cut -c -40`;
+    chomp($branch);
     my $head;
     if ($do_new_versions) {
 	$head = revparse($branch) // revparse("HEAD");
