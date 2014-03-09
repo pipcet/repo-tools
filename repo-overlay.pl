@@ -138,14 +138,14 @@ my %items;
 sub store_item {
     my ($item) = @_;
 
-    $item->{abs} =~ s/\/*$//;
-    my $abs = $item->{abs};
+    $item->{repopath} =~ s/\/*$//;
+    my $repopath = $item->{repopath};
 
-    $item->{rel} =~ s/\/*$//;
+    $item->{gitpath} =~ s/\/*$//;
 
-    $item->{rel} = substr($abs, length($item->{repo}));
+    $item->{gitpath} = substr($repopath, length($item->{repo}));
 
-    my $olditem = $items{$abs};
+    my $olditem = $items{$repopath};
 
     if ($olditem) {
 	my $repo = $item->{repo};
@@ -158,40 +158,40 @@ sub store_item {
 	}
 	$item = $olditem;
 	$item->{repo} = $repo;
-	$item->{rel} = substr($abs, length($repo));
+	$item->{gitpath} = substr($repopath, length($repo));
     } else {
-	$items{$abs} = $item;
+	$items{$repopath} = $item;
     }
 
-    return if $abs eq ".";
+    return if $repopath eq ".";
 
-    my $dir = dirname($abs);
+    my $dir = dirname($repopath);
     if (!$items{$dir} ||
 	$item->{changed} > $items{$dir}{changed}) {
-	store_item($item->{changed} ? {abs=>dirname($abs), changed=>1} : {abs=>dirname($abs)});
+	store_item($item->{changed} ? {repopath=>dirname($repopath), changed=>1} : {repopath=>dirname($repopath)});
     }
 }
 
 sub git_walk_tree {
-    my ($repo, $abs, $head, $recurse) = @_;
+    my ($repo, $gitpath, $head, $recurse) = @_;
 
     if ($recurse == 0) {
 	# git ls-tree shows both files and directories, but doesn't
 	# recurse. git ls-tree -r recurses, but doesn't show
 	# directories. git ls-tree -dr recurses, but only shows
 	# directories. We want everything.
-	my @lstree_lines = (split(/\0/, `git ls-tree '$head':'$abs' -zdr`),
-			    split(/\0/, `git ls-tree '$head':'$abs' -zr`));
+	my @lstree_lines = (split(/\0/, `git ls-tree '$head':'$gitpath' -zdr`),
+			    split(/\0/, `git ls-tree '$head':'$gitpath' -zr`));
 
-	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^\t]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $abs.(($abs eq "")?"":"/").$5 } } @lstree_lines;
+	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^\t]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
 
 	for my $m (@modes) {
 	    if ($m->{extmode} eq "120") {
-		store_item({oldtype=>"link", abs=>$repo.$m->{path}, repo=>$repo});
+		store_item({oldtype=>"link", repopath=>$repo.$m->{path}, repo=>$repo});
 	    } elsif ($m->{extmode} eq "100") {
-		store_item({oldtype=>"file", abs=>$repo.$m->{path}, repo=>$repo});
+		store_item({oldtype=>"file", repopath=>$repo.$m->{path}, repo=>$repo});
 	    } elsif ($m->{extmode} eq "040") {
-		store_item({oldtype=>"dir", abs=>$repo.$m->{path}, repo=>$repo});
+		store_item({oldtype=>"dir", repopath=>$repo.$m->{path}, repo=>$repo});
 	    } else {
 		die "unknown mode";
 	    }
@@ -200,19 +200,19 @@ sub git_walk_tree {
 	return;
     }
 
-    my @lstree_lines = split(/\0/, `git ls-tree '$head':'$abs' -z`);
+    my @lstree_lines = split(/\0/, `git ls-tree '$head':'$repopath' -z`);
 
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $abs.(($abs eq "")?"":"/").$5 } } @lstree_lines;
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repopath.(($repopath eq "")?"":"/").$5 } } @lstree_lines;
 
     for my $m (@modes) {
 	next unless $items{dirname($m->{path})} and $items{dirname($m->{path})}{changed};
 
 	if ($m->{extmode} eq "120") {
-	    store_item({oldtype=>"link", abs=>$repo.$m->{path}, repo=>$repo});
+	    store_item({oldtype=>"link", repopath=>$repo.$m->{path}, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
-	    store_item({oldtype=>"file", abs=>$repo.$m->{path}, repo=>$repo});
+	    store_item({oldtype=>"file", repopath=>$repo.$m->{path}, repo=>$repo});
 	} elsif ($m->{extmode} eq "040") {
-	    store_item({oldtype=>"dir", abs=>$repo.$m->{path}, repo=>$repo});
+	    store_item({oldtype=>"dir", repopath=>$repo.$m->{path}, repo=>$repo});
 	    git_walk_tree($repo, $m->{path}, $head, $recurse - 1) if $items{$repo.$m->{path}} and $items{$repo.$m->{path}}{changed};
 	} else {
 	    die "unknown mode";
@@ -342,7 +342,7 @@ unless ($do_new_symlinks) {
     for my $dir (@dirs) {
 	$dir =~ s/^\.\///;
 	$dir =~ s/\/*$//;
-	store_item({abs=>$dir, changed=>1});
+	store_item({repopath=>$dir, changed=>1});
     }
 
     my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
@@ -350,7 +350,7 @@ unless ($do_new_symlinks) {
     for my $file (@files) {
 	$file =~ s/^\.\///;
 	$file =~ s/\/*$//;
-	store_item({abs=>$file, changed=>1});
+	store_item({repopath=>$file, changed=>1});
     }
 
     chdir($pwd);
@@ -376,8 +376,8 @@ if (defined($apply) and defined($apply_repo) and
     @repos = repos();
 }
 my %repos;
-store_item({abs=>"", changed=>1});
-store_item({abs=>".", changed=>1});
+store_item({repopath=>"", changed=>1});
+store_item({repopath=>".", changed=>1});
 for my $repo (@repos) {
     $repos{$repo} = { repo=>$repo };
     chdir($pwd);
@@ -407,7 +407,7 @@ for my $repo (@repos) {
 	die "version mismatch";
     }
 
-    store_item({abs=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
+    store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
 
     my %diffstat;
     if ($oldhead eq $head) {
@@ -420,11 +420,11 @@ for my $repo (@repos) {
 	my $stat = $diffstat{$path};
 
 	if ($stat eq "M") {
-	    store_item({abs=>$repo.$path, status=>" M", changed=>1});
+	    store_item({repopath=>$repo.$path, status=>" M", changed=>1});
 	} elsif ($stat eq "A") {
-	    store_item({abs=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??", changed=>1});
+	    store_item({repopath=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??", changed=>1});
 	} elsif ($stat eq "D") {
-	    store_item({abs=>$repo.$path, status=>" D", changed=>1});
+	    store_item({repopath=>$repo.$path, status=>" D", changed=>1});
 	} else {
 	    die "$stat $path";
 	}
@@ -439,13 +439,13 @@ for my $repo (@repos) {
 
 chdir($pwd);
 for my $item (values %items) {
-    if (-l $item->{abs}) {
+    if (-l $item->{repopath}) {
 	$item->{newtype} = "link";
-    } elsif (!-e $item->{abs}) {
+    } elsif (!-e $item->{repopath}) {
 	$item->{newtype} = "none";
-    } elsif (-d $item->{abs}) {
+    } elsif (-d $item->{repopath}) {
 	$item->{newtype} = "dir";
-    } elsif (-f $item->{abs}) {
+    } elsif (-f $item->{repopath}) {
 	$item->{newtype} = "file";
     } else {
 	die;
@@ -458,16 +458,16 @@ chdir($outdir);
 for my $item (values %items) {
     my $repo = $item->{repo};
     next unless $repos{$repo} or $do_new_symlinks;
-    my $abs = $item->{abs};
-    next if $abs eq "" or $abs eq ".";
-    next unless $items{dirname($abs)}{changed};
-    my $rel = $item->{rel};
+    my $repopath = $item->{repopath};
+    next if $repopath eq "" or $repopath eq ".";
+    next unless $items{dirname($repopath)}{changed};
+    my $gitpath = $item->{gitpath};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
     my $head = $repos{$repo} && $repos{$repo}{head};
 
     if ($oldtype eq "dir") {
-	my $dir = $abs;
+	my $dir = $repopath;
 
 	die if $dir eq ".";
 	my $dirname = $dir;
@@ -482,7 +482,7 @@ for my $item (values %items) {
 	}
     }
     if ($type eq "dir") {
-	my $dir = $abs;
+	my $dir = $repopath;
 
 	die if $dir eq ".";
 	my $dirname = $dir;
@@ -497,7 +497,7 @@ for my $item (values %items) {
 	}
     }
     if ($oldtype eq "file") {
-	my $file = $rel;
+	my $file = $gitpath;
 
 	if ($item->{changed}) {
 	    cat_file($repo, $head, $file, "import/$repo$file");
@@ -506,7 +506,7 @@ for my $item (values %items) {
 	}
     }
     if ($type eq "file") {
-	my $file = $rel;
+	my $file = $gitpath;
 
 	if ($item->{changed}) {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
@@ -515,12 +515,12 @@ for my $item (values %items) {
 	}
     }
     if ($oldtype eq "link") {
-	my $file = $rel;
+	my $file = $gitpath;
 
 	symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
     }
     if ($type eq "link") {
-	my $file = $rel;
+	my $file = $gitpath;
 
 	copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
     }
