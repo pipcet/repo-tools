@@ -10,6 +10,7 @@ my $do_new_versions;
 my $do_new_symlinks;
 my $do_print_range;
 my $do_hardlink;
+my $do_commit;
 
 my $apply;
 my $apply_repo;
@@ -37,6 +38,7 @@ GetOptions(
     "new-symlinks!" => \$do_new_symlinks,
     "apply=s" => \$apply,
     "apply-repo=s" => \$apply_repo,
+    "commit!" => \$do_commit,
     "commit-message-file=s" => \$commit_message_file,
     "commit-authordate=s" => \$commit_authordate,
     "commit-author=s" => \$commit_author,
@@ -596,7 +598,7 @@ copy_or_hardlink("$outdir/versions/versions.txt", "$outdir/import/") or die;
 # doesn't get confused about which relative path to use.
 nsystem("ln -s $pwd $outdir/repo-overlay");
 
-if (defined($commit_message_file)) {
+if ($do_commit and defined($commit_message_file)) {
     chdir("$outdir/import");
     nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
 	    (defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
