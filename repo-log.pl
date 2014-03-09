@@ -76,7 +76,7 @@ sub peek {
     if ($h->{eof}) {
 	return undef;
     }
-    
+
     return $h->{commits}->[$n];
 }
 
@@ -97,7 +97,7 @@ sub new {
     #if (system("(cd '$repo'; grep -q Quarx2k .git/config)")) {
     #    return undef;
     #}
-    
+
     $h->{commits} = [];
     $h->{n} = 0;
     $h->{repo} = $repo;
