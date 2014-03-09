@@ -252,14 +252,14 @@ nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
 
 if ($do_new_versions) {
-    nsystem("rm $outdir/versions/versions.txt; touch $outdir/versions/versions.txt");
+    nsystem("rm -rf $outdir/versions/*; touch $outdir/versions/*");
 }
 
 my %version;
 my %rversion;
 
 my $version_fh;
-open $version_fh, "<$outdir/versions/versions.txt" or die;
+open $version_fh, "cat /dev/null \$(find $outdir/versions -name version.txt)|";
 while (<$version_fh>) {
     chomp;
 
@@ -267,8 +267,10 @@ while (<$version_fh>) {
     my $head;
 
     if (($path, $head) = /^(.*): (.*)$/) {
-	$version{$path} = $head;
-	$rversion{$head} = $path;
+	if ($head ne "") {
+	    $version{$path} = $head;
+	    $rversion{$head} = $path;
+	}
     }
 }
 close $version_fh;
@@ -581,11 +583,12 @@ for my $item (values %items) {
 chdir($pwd);
 
 if ($apply_success or $do_new_versions) {
-    open $version_fh, ">>$outdir/versions/versions.txt";
     for my $repo (@repos) {
+	mkdirp("$outdir/versions/$repo");
+	open $version_fh, ">$outdir/versions/$repo"."version.txt";
 	print $version_fh "$repo: ".$version{$repo}."\n";
+	close $version_fh;
     }
-    close $version_fh;
 }
 
 copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
