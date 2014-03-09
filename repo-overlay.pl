@@ -61,18 +61,18 @@ sub repos_new {
 
     if (! -d "$outdir/manifests/$version/manifests") {
 	nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
-
-	nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests");
-	nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -av .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
+	nsystem("cp -a $pwd/.repo/local_manifests $outdir/manifests/$version/") or die;
+	nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests") or die;
+	nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
     }
 
-    chdir("$outdir/import");
-    nsystem("python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list");
-    my @res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list`;
+    chdir($pwd);
+    my @res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list -p`;
 
-    map { chomp; s/^\.\///; } @res;
+    map { chomp; s/^\.\///; s/\/*$/\//; } @res;
 
-    warn "repos: " . join(", ", @res);
+    unshift @res, ".repo/repo/";
+    unshift @res, ".repo/manifests/";
 
     return @res;
 }
