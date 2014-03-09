@@ -5,6 +5,78 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
+
+my $do_new_versions;
+my $do_new_symlinks;
+my $do_print_range;
+my $do_hardlink;
+
+my $apply;
+my $apply_repo;
+my $apply_success;
+
+my $outdir;
+my $indir = ".";
+
+my $branch = '@{February.1}';
+my $commit_message_file;
+
+my $commit_commitdate;
+my $commit_committer;
+my $commit_authordate;
+my $commit_author;
+my $arg_recurse=1;
+
+GetOptions(
+    "hardlink!" => \$do_hardlink,
+    "out=s" => \$outdir,
+    "in=s" => \$indir,
+    "branch=s" => \$branch,
+    "print-range!" => \$do_print_range,
+    "new-versions!" => \$do_new_versions,
+    "new-symlinks!" => \$do_new_symlinks,
+    "apply=s" => \$apply,
+    "apply-repo=s" => \$apply_repo,
+    "commit-message-file=s" => \$commit_message_file,
+    "commit-authordate=s" => \$commit_authordate,
+    "commit-author=s" => \$commit_author,
+    "commit-commitdate=s" => \$commit_commitdate,
+    "commit-committer=s" => \$commit_committer,
+    "recurse=i" => \$arg_recurse,
+    ) or die;
+
+$apply_repo =~ s/\/*$/\//;
+$apply_repo =~ s/^\.\///;
+
+$outdir =~ s/\/*$//;
+$indir =~ s/\/*$//;
+
+chdir($indir) or die;
+
+my $pwd = `pwd`;
+chomp($pwd);
+
+sub repos_new {
+    my ($version) = @_;
+
+    if (! -d "$outdir/manifests/$version/manifests") {
+	nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
+
+	nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests");
+	nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -av .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
+    }
+
+    chdir("$outdir/import");
+    nsystem("python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list");
+    my @res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list`;
+
+    map { chomp; s/^\.\///; } @res;
+
+    warn "repos: " . join(", ", @res);
+
+    return @res;
+}
+
 sub repos {
     my @repos = split(/\0/, `find  -name '.git' -print0 -prune -o -name '.repo' -prune -o -path './out' -prune`);
 #pop(@repos);
@@ -71,55 +143,6 @@ sub copy_or_hardlink {
 
     return 1;
 }
-
-my $do_new_versions;
-my $do_new_symlinks;
-my $do_print_range;
-
-my $apply;
-my $apply_repo;
-my $apply_success;
-
-my $outdir;
-my $indir = ".";
-
-my $branch = '@{February.1}';
-my $commit_message_file;
-
-my $commit_commitdate;
-my $commit_committer;
-my $commit_authordate;
-my $commit_author;
-my $arg_recurse=1;
-
-GetOptions(
-    "hardlink!" => \$do_hardlink,
-    "out=s" => \$outdir,
-    "in=s" => \$indir,
-    "branch=s" => \$branch,
-    "print-range!" => \$do_print_range,
-    "new-versions!" => \$do_new_versions,
-    "new-symlinks!" => \$do_new_symlinks,
-    "apply=s" => \$apply,
-    "apply-repo=s" => \$apply_repo,
-    "commit-message-file=s" => \$commit_message_file,
-    "commit-authordate=s" => \$commit_authordate,
-    "commit-author=s" => \$commit_author,
-    "commit-commitdate=s" => \$commit_commitdate,
-    "commit-committer=s" => \$commit_committer,
-    "recurse=i" => \$arg_recurse,
-    ) or die;
-
-$apply_repo =~ s/\/*$/\//;
-$apply_repo =~ s/^\.\///;
-
-$outdir =~ s/\/*$//;
-$indir =~ s/\/*$//;
-
-chdir($indir) or die;
-
-my $pwd = `pwd`;
-chomp($pwd);
 
 sub cat_file {
     my ($repo, $branch, $file, $dst) = @_;
