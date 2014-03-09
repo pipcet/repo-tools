@@ -222,7 +222,7 @@ sub git_walk_tree {
 	# recurse. git ls-tree -r recurses, but doesn't show
 	# directories. git ls-tree -dr recurses, but only shows
 	# directories. We want everything.
-	my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -zdtr`);
+	my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -ztr`);
 
 	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^\t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
 
