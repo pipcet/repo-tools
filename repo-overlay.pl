@@ -180,18 +180,18 @@ sub git_walk_tree {
 	# recurse. git ls-tree -r recurses, but doesn't show
 	# directories. git ls-tree -dr recurses, but only shows
 	# directories. We want everything.
-	my @lstree_lines = (split(/\0/, `git ls-tree '$head':'$gitpath' -zdr`),
-			    split(/\0/, `git ls-tree '$head':'$gitpath' -zr`));
+	my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -zdtr`);
 
-	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^\t]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
+	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^\t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
 
 	for my $m (@modes) {
+	    my $path = $m->{path};
 	    if ($m->{extmode} eq "120") {
-		store_item({oldtype=>"link", repopath=>$repo.$m->{path}, repo=>$repo});
+		store_item({oldtype=>"link", repopath=>$repo.$path, repo=>$repo});
 	    } elsif ($m->{extmode} eq "100") {
-		store_item({oldtype=>"file", repopath=>$repo.$m->{path}, repo=>$repo});
+		store_item({oldtype=>"file", repopath=>$repo.$path, repo=>$repo});
 	    } elsif ($m->{extmode} eq "040") {
-		store_item({oldtype=>"dir", repopath=>$repo.$m->{path}, repo=>$repo});
+		store_item({oldtype=>"dir", repopath=>$repo.$path, repo=>$repo});
 	    } else {
 		die "unknown mode";
 	    }
@@ -200,20 +200,22 @@ sub git_walk_tree {
 	return;
     }
 
-    my @lstree_lines = split(/\0/, `git ls-tree '$head':'$repopath' -z`);
+    my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -z`);
 
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/; { mode=> $2, extmode => $1, path => $repopath.(($repopath eq "")?"":"/").$5 } } @lstree_lines;
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
 
     for my $m (@modes) {
-	next unless $items{dirname($m->{path})} and $items{dirname($m->{path})}{changed};
+	my $path = $m->{path};
+	next unless $items{dirname($repo.$path)}{changed};
 
 	if ($m->{extmode} eq "120") {
-	    store_item({oldtype=>"link", repopath=>$repo.$m->{path}, repo=>$repo});
+	    store_item({oldtype=>"link", repopath=>$repo.$path, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
-	    store_item({oldtype=>"file", repopath=>$repo.$m->{path}, repo=>$repo});
+	    store_item({oldtype=>"file", repopath=>$repo.$path, repo=>$repo});
 	} elsif ($m->{extmode} eq "040") {
-	    store_item({oldtype=>"dir", repopath=>$repo.$m->{path}, repo=>$repo});
-	    git_walk_tree($repo, $m->{path}, $head, $recurse - 1) if $items{$repo.$m->{path}} and $items{$repo.$m->{path}}{changed};
+	    store_item({oldtype=>"dir", repopath=>$repo.$path, repo=>$repo});
+	    git_walk_tree($repo, $path, $head, $recurse - 1)
+		if $items{$repo.$path}{changed};
 	} else {
 	    die "unknown mode";
 	}
@@ -298,7 +300,6 @@ if (defined($apply) and defined($apply_repo)) {
 
     my $repo = $apply_repo;
     chdir($repo);
-    # XXX octopus merges are broken. How do I find out how many parents a commit has?
     if (grep { $_ eq $version{$repo} } git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
