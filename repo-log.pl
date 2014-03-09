@@ -7,13 +7,14 @@ my $commit_dir;
 my $since_date = "2.months.ago";
 my @repos;
 my $range;
-
+my $sha2log;
 GetOptions(
     "just-shas!" => \$do_just_shas,
     "commit-dir=s" => \$commit_dir,
     "since=s" => \$since_date,
     "repo=s" => \@repos,
     "range=s" => \$range,
+    "sha2log=s" => \$sha2log,
     );
 
 @repos = split(/,/, join(",", @repos));
@@ -107,7 +108,16 @@ sub new {
     } else {
 	$tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
     }
-    open($h->{fh}, "(cd '$repo'; git log -p --sparse --full-history --pretty=tformat:'$tformat' --since='$since_date' --date=iso $range)|") or die;
+    my $cmd = "git log -p --sparse --full-history --pretty=tformat:'$tformat' --date=iso $range";
+
+    if (defined($sha2log)) {
+	$cmd .= " '$sha2log'";
+    }
+    if (defined($since_date)) {
+	$cmd .= " --since='$since_date'";
+    }
+
+    open($h->{fh}, "(cd '$repo'; $cmd)|") or die;
 
     return bless($h, $class);
 }
