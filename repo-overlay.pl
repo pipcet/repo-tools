@@ -110,7 +110,6 @@ sub nsystem {
     return !system($cmd);
 }
 
-my $do_hardlink;
 sub mkdirp {
     my ($dir) = @_;
 
