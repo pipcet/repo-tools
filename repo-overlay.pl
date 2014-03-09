@@ -127,6 +127,8 @@ sub prefixes {
 sub nsystem {
     my ($cmd) = @_;
 
+    warn "running $cmd";
+
     return !system($cmd);
 }
 
@@ -607,6 +609,11 @@ if ($apply_success or $do_new_versions) {
 	open $version_fh, ">$outdir/versions/$repo"."version.txt";
 	print $version_fh "$repo: ".$version{$repo}."\n";
 	close $version_fh;
+
+	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
+	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
+	print $version_fh "$repo: ".$version{$repo}."\n";
+	close $version_fh;
     }
 }
 
@@ -614,7 +621,6 @@ copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
 copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
 copy_or_hardlink("$pwd/Makefile", "$outdir/import/") or die;
 copy_or_hardlink("$pwd/Makefile", "$outdir/export/") or die;
-copy_or_hardlink("$outdir/versions/versions.txt", "$outdir/import/") or die;
 
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
