@@ -58,6 +58,11 @@ chdir($indir) or die;
 my $pwd = `pwd`;
 chomp($pwd);
 
+
+my %repos;
+
+
+
 sub repos_new {
     my ($version) = @_;
 
@@ -69,14 +74,27 @@ sub repos_new {
     }
 
     chdir($pwd);
-    my @res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list -p`;
+    my @res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
+    map { $_ = [split(/ : /)] } @res;
 
-    map { chomp; s/^\.\///; s/\/*$/\//; } @res;
+    map { $_->[0] =~ s/\/*$/\//; } @res;
 
-    unshift @res, ".repo/repo/";
-    unshift @res, ".repo/manifests/";
+    for my $r (@res) {
+	print join(", ", @$r)."\n";
+	my ($repopath, $manifest_name, $manifest_url, $manifest_revision) = @$r;
+	$repos{$repopath}{manifest_name} = $manifest_name;
+	$repos{$repopath}{manifest_url} = $manifest_url;
+	$repos{$repopath}{manifest_revision} = $manifest_revision;
+    }
 
-    return @res;
+    my @repos = map { $_->[0] } @res;
+
+    map { chomp; s/^\.\///; s/\/*$/\//; } @repos;
+
+    unshift @repos, ".repo/repo/";
+    unshift @repos, ".repo/manifests/";
+
+    return @repos;
 }
 
 sub repos {
@@ -326,6 +344,7 @@ if (defined($apply) and defined($apply_repo)) {
 
     my $repo = $apply_repo;
     chdir($repo) or die;
+    die if $version{$repo} eq "";
     if (grep { $_ eq $version{$repo} } git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
@@ -403,14 +422,12 @@ if (defined($apply) and defined($apply_repo) and
     @repos = repos_new(get_head(".repo/manifests/"));
 }
 
-my %repos;
-
 sub get_head {
     my ($repo) = @_;
 
-    return $repos{$repo}{head} if $repos{$repo};
+    return $repos{$repo}{head} if defined($repos{$repo}{head});
 
-    $repos{$repo} = { repo=>$repo };
+    $repos{$repo}{repo} = $repo;
     chdir($pwd);
     chdir($repo) or return undef;
     my $branch = `git log -1 --reverse --pretty=oneline --until='February 1'|cut -c -40`;
@@ -421,6 +438,8 @@ sub get_head {
     } else {
 	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
     }
+
+    die if $head eq "";
 
     if (!defined($rversion{$head}) or
 	$head ne $version{$repo}) {
@@ -511,14 +530,14 @@ for my $item (values %items) {
 chdir($outdir);
 for my $item (values %items) {
     my $repo = $item->{repo};
-    next unless $repos{$repo} or $do_new_symlinks;
+    next unless defined($repos{$repo}{head}) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
     next unless $items{dirname($repopath)}{changed};
     my $gitpath = $item->{gitpath};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
-    my $head = $repos{$repo} && $repos{$repo}{head};
+    my $head = $repos{$repo}{head};
 
     if ($oldtype eq "dir") {
 	my $dir = $repopath;
@@ -614,7 +633,7 @@ if ($do_commit and defined($commit_message_file)) {
 #  diff -urNx .git -x .repo -x out -x out-old repo-overlay/ export/|(cd repo-overlay; patch -p1)
 
 # perl ~/repo-tools/repo-overlay.pl --new-symlinks --new-versions --out=/home/pip/tmp-repo-overlay
-# perl ~/repo-tools/repo-log.pl --just-shas|tac|while read; do echo $REPLY; sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay" && (cd ~/tmp-repo-overlay/import; git add --all .; git commit --allow-empty -m "$REPLY"); done
+# perl ~/repo-tools/repo-log.pl --just-shas|tac|while read && echo $REPLY && sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay"; do true; done
 # perl ~/repo-tools/repo-log.pl --just-shas|tac|while read; do echo $REPLY; sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay"; done
 
 exit(0);
