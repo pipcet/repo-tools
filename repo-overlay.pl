@@ -321,7 +321,7 @@ if (defined($apply) and defined($apply_repo)) {
     die if $apply eq "";
 
     my $repo = $apply_repo;
-    chdir($repo);
+    chdir($repo) or die;
     if (grep { $_ eq $version{$repo} } git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
@@ -396,15 +396,19 @@ if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
     @repos = ($apply_repo =~ s/\/*$/\//r);
 } else {
-    @repos = repos();
+    @repos = repos_new(get_head(".repo/manifests/"));
 }
+
 my %repos;
-store_item({repopath=>"", changed=>1});
-store_item({repopath=>".", changed=>1});
-for my $repo (@repos) {
+
+sub get_head {
+    my ($repo) = @_;
+
+    return $repos{$repo}{head} if $repos{$repo};
+
     $repos{$repo} = { repo=>$repo };
     chdir($pwd);
-    chdir($repo);
+    chdir($repo) or return undef;
     my $branch = `git log -1 --reverse --pretty=oneline --until='February 1'|cut -c -40`;
     chomp($branch);
     my $head;
@@ -412,6 +416,12 @@ for my $repo (@repos) {
 	$head = revparse($branch) // revparse("HEAD");
     } else {
 	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
+    }
+
+    if (!defined($rversion{$head}) or
+	$head ne $version{$repo}) {
+    } elsif ($version{$rversion{$head}} ne $head) {
+	die "version mismatch";
     }
 
     my $oldhead = $head;
@@ -425,14 +435,29 @@ for my $repo (@repos) {
     }
     $version{$repo} = $head;
     $repos{$repo}{head} = $head;
+    $repos{$repo}{oldhead} = $oldhead;
 
-    if (!defined($rversion{$head}) or
-	$head ne $version{$repo}) {
-    } elsif ($version{$rversion{$head}} ne $head) {
-	die "version mismatch";
-    }
+    chdir($pwd);
+
+    return $head;
+}
+
+store_item({repopath=>"", changed=>1});
+store_item({repopath=>".", changed=>1});
+for my $repo (@repos) {
+    my $head = get_head($repo);
+    my $oldhead = $repos{$repo}{oldhead};
+
+    chdir($pwd);
+    chdir($repo);
 
     store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
+
+    if (!defined($head)) {
+	store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
+	$repos{$repo}{deleted} = 1;
+	next;
+    }
 
     my %diffstat;
     if ($oldhead eq $head) {
