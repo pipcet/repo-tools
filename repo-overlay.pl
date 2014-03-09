@@ -127,8 +127,6 @@ sub prefixes {
 sub nsystem {
     my ($cmd) = @_;
 
-    warn "running $cmd";
-
     return !system($cmd);
 }
 
@@ -273,6 +271,7 @@ nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
 
 if ($do_new_versions) {
     nsystem("rm -rf $outdir/versions/*");
+    nsystem("rm -rf $outdir/import/.pipcet-ro/versions/*");
 }
 
 my %version;
