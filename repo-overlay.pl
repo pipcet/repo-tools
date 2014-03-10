@@ -19,6 +19,8 @@ my $do_de_emancipate;
 my $apply;
 my $apply_repo;
 my $apply_success;
+my $apply_repo_name;
+my $apply_last_manifest;
 
 my $outdir;
 my $indir = ".";
@@ -42,6 +44,8 @@ GetOptions(
     "new-symlinks!" => \$do_new_symlinks,
     "apply=s" => \$apply,
     "apply-repo=s" => \$apply_repo,
+    "apply-repo-name=s" => \$apply_repo_name,
+    "apply-last-manifest" => \$apply_last_manifest,
     "commit!" => \$do_commit,
     "commit-message-file=s" => \$commit_message_file,
     "commit-authordate=s" => \$commit_authordate,
@@ -508,14 +512,10 @@ if ($do_new_symlinks or !defined($apply_repo)) {
     nsystem("rm -rf $outdir/export/" . ($apply_repo =~ s/\/$//r));
 }
 
-if (defined($apply) and defined($apply_repo) and
-    !$do_new_symlinks and !$do_new_versions) {
-} else {
-    $repos = repos(get_head(".repo/manifests/"));
+$repos = repos(get_head(".repo/manifests/"));
 
-    for my $repo (values %$repos) {
-	$repo->{name} = $repo->{manifest_name} // $repo->{name};
-    }
+for my $repo (values %$repos) {
+    $repo->{name} = $repo->{manifest_name} // $repo->{name};
 }
 
 read_versions($repos);
@@ -532,10 +532,29 @@ if ($do_new_symlinks) {
 
 my @repos = sort keys %$repos;
 
+if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
+    my $manifest = $apply_last_manifest // "HEAD";
+    my $backrepos = repos($manifest);
+    my $name = $backrepos->{$apply_repo}{manifest_name};
+
+    die "cannot resolve repo $apply_repo" if (!defined($name));
+
+    $apply_repo_name = $name;
+    $repos->{$apply_repo} = $backrepos->{$apply_repo};
+    $repos->{$apply_repo}{name} = $name;
+
+    warn "resolved $apply_repo to $name\n";
+}
+
+if (defined($apply) and defined($apply_repo) and
+    !$do_new_symlinks and !$do_new_versions) {
+    @repos = ($apply_repo);
+}
+
 sub get_head {
     my ($repo) = @_;
 
-    return $repos->{$repo}{head} if defined($repos->{$repo}{head});
+    return $repos->{$repo}{head} if exists($repos->{$repo}{head});
 
     $repos->{$repo}{repo} = $repo;
 
