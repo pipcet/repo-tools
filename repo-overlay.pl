@@ -649,7 +649,7 @@ nsystem("ln -s $pwd $outdir/repo-overlay");
 if ($do_commit and defined($commit_message_file)) {
     chdir("$outdir/import");
     if ($do_emancipate) {
-	nsystem("git add --all; git commit --allow-empty -m 'emancipation commit for $apply' " .
+	nsystem("git add --all; git commit -m 'emancipation commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : ""));
     } else {
