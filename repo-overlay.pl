@@ -376,7 +376,7 @@ my %rversion;
 
 sub read_versions {
     my ($repos) = @_;
-
+    my $version = { };
     my $version_fh;
 
     open $version_fh, "cat /dev/null \$(find $outdir/import/.pipcet-ro/versions/ -name version.txt)|";
@@ -389,13 +389,15 @@ sub read_versions {
 
 	if (($path, $head, $versioned_name) = /^(.*): (.*) (.*)$/) {
 	    if ($head ne "") {
-		$version{$path} = $head;
+		$version->{$path} = $head;
 		$rversion{$head} = $path;
 	    }
 	    $repos->{$path}{versioned_name} = $versioned_name;
 	}
     }
     close $version_fh;
+
+    return $version;
 }
 
 sub revparse {
@@ -426,7 +428,7 @@ sub git_parents {
 }
 
 if ($do_print_range and defined($apply_repo)) {
-    read_versions({});
+    my %version = %{read_versions({})};
 
     chdir($pwd);
     chdir($apply_repo);
@@ -438,7 +440,7 @@ if ($do_print_range and defined($apply_repo)) {
 if (defined($apply) and defined($apply_repo)) {
     die if $apply eq "";
 
-    read_versions({});
+    my %version = %{read_versions({})};
 
     my $repo = $apply_repo;
     chdir($repo) or die;
@@ -525,7 +527,7 @@ for my $repo (values %$repos) {
     $repo->{name} = $repo->{manifest_name} // $repo->{name};
 }
 
-read_versions($repos);
+%version = %{read_versions($repos)};
 
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
@@ -613,6 +615,7 @@ sub get_head {
 
 store_item({repopath=>"", changed=>1});
 store_item({repopath=>".", changed=>1});
+
 for my $repo (@repos) {
     my $head = get_head($repo);
     my $oldhead = $repos->{$repo}{oldhead};
@@ -663,13 +666,21 @@ for my $repo (@repos) {
 
     if ($repo eq ".repo/manifests/") {
 	$do_rebuild_tree = 1;
-	warn "rebuild tree!"
+	warn "rebuild tree!";
+	my $new_versions = read_versions({});
+
+	for my $key (keys %$new_versions) {
+	    if ($version{$key} ne $new_versions->{$key}) {
+		warn "tree rb: $key changed from $version{$key} to " . $new_versions->{$key};
+	    }
+	}
     }
 
     git_walk_tree($repo, "", $head);
 }
 
 chdir($pwd);
+
 for my $item (values %items) {
     if (-l $item->{repopath}) {
 	$item->{newtype} = "link";
