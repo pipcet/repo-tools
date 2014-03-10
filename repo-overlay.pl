@@ -268,6 +268,7 @@ sub git_walk_tree {
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 
 nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
+-d "$outdir/import/.git" or die;
 
 if ($do_new_versions) {
     nsystem("rm -rf $outdir/versions/*");
