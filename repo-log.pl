@@ -222,6 +222,7 @@ while(1) {
 
 	    if ($repo eq ".repo/manifests") {
 		$last_manifest = $entry->{sha};
+		warn "manifest updated to $last_manifest";
 	    }
 	} else {
 	    my $repo = $dates[0][2]->{repo};
