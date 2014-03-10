@@ -94,6 +94,23 @@ sub repos_get_gitpath {
     return $gitpath;
 }
 
+my %repo_master_cache;
+sub repo_master {
+    my ($name) = @_;
+
+    if ($repo_master_cache{$name}) {
+	return $repo_master_cache{$name};
+    } else {
+	my $master = readlink("$outdir/repos-by-name/$name/repo");
+
+	die "no master for $name" unless(defined($master));
+
+	$repo_master_cache{$name} = $master;
+
+	return $master;
+    }
+}
+
 sub setup_repo_links {
     system("rm -rf $outdir/manifests/HEAD");
     my $head_repos = repos("HEAD");
