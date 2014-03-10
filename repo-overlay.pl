@@ -68,7 +68,7 @@ chdir($indir) or die;
 my $pwd = `pwd`;
 chomp($pwd);
 
-if (defined($commit_commitdate)) {
+if (defined($commit_commitdate) and !$do_emancipate) {
     print "$commit_commitdate\n";
 }
 
@@ -92,7 +92,7 @@ sub repos_get_gitpath {
 	    $url = "https://github.com/" . $repos->{$repo}{name};
 	}
 
-	warn "no repository for " . $repos->{$repo}{name} . " url $url";
+	die "no repository for " . $repos->{$repo}{name} . " url $url";
 
 	#system("git clone $url $outdir/other-repositories/" . $repos->{$repo}{name});
 	return undef;
