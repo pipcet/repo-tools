@@ -286,8 +286,9 @@ while (<$version_fh>) {
 
     my $path;
     my $head;
+    my $versioned_name;
 
-    if (($path, $head) = /^(.*): (.*)$/) {
+    if (($path, $head, $versioned_name) = /^(.*): (.*) (.*)$/) {
 	if ($head ne "") {
 	    $version{$path} = $head;
 	    $rversion{$head} = $path;
@@ -611,14 +612,9 @@ chdir($pwd);
 
 if ($apply_success or $do_new_versions) {
     for my $repo (@repos) {
-	mkdirp("$outdir/versions/$repo");
-	open $version_fh, ">$outdir/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$version{$repo}."\n";
-	close $version_fh;
-
 	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$version{$repo}."\n";
+	print $version_fh "$repo: ".$version{$repo}." $repos{$repo}{manifest_name}\n";
 	close $version_fh;
     }
 }
