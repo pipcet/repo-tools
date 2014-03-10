@@ -729,7 +729,7 @@ for my $item (values %items) {
 		symlink_relative(repo_master($repos->{$repo}{name}) . "/$gitpath", "export/$dir") or die;
 	    }
 	} else {
-	    mkdirp("import/$dir")
+	    mkdirp("export/$dir")
 	}
     }
     if ($oldtype eq "file") {
