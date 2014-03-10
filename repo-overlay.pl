@@ -762,19 +762,6 @@ for my $item (values %items) {
     }
 }
 
-chdir($pwd);
-
-if ($apply_success or $do_new_versions) {
-    for my $repo (@repos) {
-	my $version_fh;
-
-	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
-	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$version{$repo}." ".$repos->{$repo}{name}."\n";
-	close $version_fh;
-    }
-}
-
 copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
 copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
 copy_or_hardlink("$pwd/Makefile", "$outdir/import/") or die;
@@ -782,7 +769,7 @@ copy_or_hardlink("$pwd/Makefile", "$outdir/export/") or die;
 
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
-nsystem("ln -s $pwd $outdir/repo-overlay");
+nsystem("ln -s $pwd $outdir/repo-overlay") or die;
 
 if ($do_rebuild_tree and !$do_emancipate) {
 
@@ -793,11 +780,24 @@ if ($do_commit and defined($commit_message_file)) {
     if ($do_emancipate) {
 	nsystem("git add --all; git commit -m 'emancipation commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : ""));
+		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
     } else {
 	nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : ""));
+		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
+    }
+}
+
+chdir($pwd);
+
+if ($apply_success or $do_new_versions) {
+    for my $repo (@repos) {
+	my $version_fh;
+
+	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
+	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
+	print $version_fh "$repo: ".$version{$repo}." ".$repos->{$repo}{name}."\n";
+	close $version_fh;
     }
 }
 
