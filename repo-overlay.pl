@@ -450,8 +450,14 @@ if (defined($apply) and defined($apply_repo)) {
 	if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
 	    exit(0);
 	}
+	if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
+	    nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
+	    exit(0);
+	    $msg .= "but all will be good in the future.\n";
+	    die $msg;
+	}
 	if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
-	    $msg .= "missing link for $repo";
+	    $msg .= "missing link for $repo\n";
 	}
 
 	$msg .= " repo ancestors:\n";
