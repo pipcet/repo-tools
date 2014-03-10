@@ -268,7 +268,7 @@ sub git_walk_tree {
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 
-nsystem("mkdir -p $outdir/import $outdir/export $outdir/versions") or die;
+nsystem("mkdir -p $outdir/import $outdir/export") or die;
 -d "$outdir/import/.git" or die;
 
 if ($do_new_versions) {
@@ -280,7 +280,7 @@ my %version;
 my %rversion;
 
 my $version_fh;
-open $version_fh, "cat /dev/null \$(find $outdir/versions -name version.txt)|";
+open $version_fh, "cat /dev/null \$(find $outdir/import/.pipcet-ro/versions/ -name version.txt)|";
 while (<$version_fh>) {
     chomp;
 
@@ -293,6 +293,7 @@ while (<$version_fh>) {
 	    $version{$path} = $head;
 	    $rversion{$head} = $path;
 	}
+	$repos{$path}{versioned_name} = $versioned_name;
     }
 }
 close $version_fh;
@@ -421,9 +422,15 @@ if ($do_new_symlinks or !defined($apply_repo)) {
 my @repos;
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
-    @repos = ($apply_repo =~ s/\/*$/\//r);
+    my $repo = ($apply_repo =~ s/\/*$/\//r);
+
+    $repos{$repo}{name} = $repos{$repo}{versioned_name};
+
+    @repos = ($repo);
 } else {
     @repos = repos_new(get_head(".repo/manifests/"));
+
+    map { $repos{$_}{name} = $repos{$_}{manifest_name} } @repos;
 }
 
 sub get_head {
@@ -614,7 +621,7 @@ if ($apply_success or $do_new_versions) {
     for my $repo (@repos) {
 	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$version{$repo}." $repos{$repo}{manifest_name}\n";
+	print $version_fh "$repo: ".$version{$repo}." $repos{$repo}{name}\n";
 	close $version_fh;
     }
 }
