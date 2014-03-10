@@ -642,8 +642,10 @@ for my $item (values %items) {
 
 	if (!$items{$dir}{changed}) {
 	    if (! (-e "import/$dir" || -l "import/$dir")) {
-		symlink_relative("$outdir/repo-overlay/$dir", "import/$dir") or die;
+		symlink_relative(repo_master($repos->{$repo}{name}) . "/$dir", "import/$dir") or die;
 	    }
+	} else {
+	    mkdirp("import/$dir")
 	}
     }
     if ($type eq "dir") {
