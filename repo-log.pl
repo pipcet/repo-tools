@@ -205,7 +205,7 @@ while(1) {
 
 	if ($do_just_shas) {
 	    my $repo = $dates[0][2]->{repo};
-	    my $repoid = $repo->{id};
+	    my $repoid = $r{$repo}->{id};
 	    my $entry = $dates[0][2]->get;
 
 	    my @msg;
