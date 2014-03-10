@@ -64,7 +64,13 @@ my $pwd = `pwd`;
 chomp($pwd);
 
 
-my %repos;
+my $repos;
+
+$repos->{".repo/manifests/"} = {
+    name => ".repo/manifests",
+    relpath => ".repo/manifests/",
+    gitpath => "$pwd/.repo/manifests/",
+};
 
 sub setup_repo_links {
     system("rm -rf $outdir/manifests/HEAD");
@@ -115,6 +121,7 @@ sub repos {
 	$repos->{$repopath}{manifest_url} = $manifest_url;
 	$repos->{$repopath}{manifest_revision} = $manifest_revision;
 	$repos->{$repopath}{path} = "$outdir/import/$repopath";
+	$repos->{$repopath}{gitpath} = "$outdir/repos-by-name/$manifest_name/repo";
     }
 
     my @repos = map { $_->[0] } @res;
@@ -126,6 +133,9 @@ sub repos {
 
     $repos->{".repo/repo/"}{path} = "$outdir/.repo/repo/";
     $repos->{".repo/manifests/"}{path} = "$outdir/.repo/manifests/";
+
+    $repos->{".repo/repo/"}{gitpath} = "$outdir/repos-by-name/.repo/repo/repo";
+    $repos->{".repo/manifests/"}{gitpath} = "$outdir/repos-by-name/.repo/manifests/repo";
 
     $repos->{".repo/repo/"}{name} = ".repo/repo";
     $repos->{".repo/manifests/"}{name} = ".repo/manifests";
@@ -242,15 +252,18 @@ sub store_item {
 }
 
 sub git_walk_tree {
-    my ($repo, $gitpath, $head) = @_;
+    my ($repo, $itempath, $head) = @_;
     my $repopath = $repos->{$repo}{path};
+    my $gitpath = $repos->{$repo}{gitpath};
 
-    chdir($pwd);
-    chdir($repopath);
+    if ($gitpath eq "" or ! -e $gitpath) {
+	die "no repository for " . $repo->{name};
+    }
+    chdir($gitpath);
 
-    my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -z`);
+    my @lstree_lines = split(/\0/, `git ls-tree '$head':'$itempath' -z`);
 
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $repopath.(($repopath eq "")?"":"/").$5 } } @lstree_lines;
 
     for my $m (@modes) {
 	my $path = $m->{path};
@@ -306,17 +319,6 @@ sub read_versions {
 	}
     }
     close $version_fh;
-}
-
-sub previous_commit {
-    my ($head) = @_;
-    my $last = `git rev-parse '$head~1'`;
-    chomp($last);
-    if ($last =~ /~1$/) {
-	return undef;
-    } else {
-	return $last;
-    }
 }
 
 sub revparse {
@@ -433,13 +435,12 @@ if ($do_new_symlinks or !defined($apply_repo)) {
     nsystem("rm -rf $outdir/export/" . ($apply_repo =~ s/\/$//r));
 }
 
-my $repos;
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
 } else {
     $repos = repos(get_head(".repo/manifests/"));
 
-    for my $repo (values %repos) {
+    for my $repo (values %$repos) {
 	$repo->{name} = $repo->{manifest_name};
     }
 }
@@ -464,8 +465,15 @@ sub get_head {
     return $repos->{$repo}{head} if defined($repos->{$repo}{head});
 
     $repos->{$repo}{repo} = $repo;
-    chdir($pwd);
-    chdir($repo) or return undef;
+
+    my $gitpath = $repos->{$repo}{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	warn "no repository for " . $repos->{$repo}{name} . " / $repo: $gitpath";
+	return undef;
+    }
+    chdir($gitpath);
+
     my $branch = `git log -1 --reverse --pretty=oneline --until='February 1'|cut -c -40`;
     chomp($branch);
     my $head;
@@ -514,8 +522,13 @@ for my $repo (@repos) {
     my $oldhead = $repos->{$repo}{oldhead};
     my $newhead = $repos->{$repo}{newhead};
 
-    chdir($pwd);
-    chdir($repo);
+    my $gitpath = $repos->{$repo}{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	warn "no repository for " . $repos->{$repo}{name};
+	next;
+    }
+    chdir($gitpath);
 
     store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
 
@@ -668,6 +681,10 @@ copy_or_hardlink("$pwd/Makefile", "$outdir/export/") or die;
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
 nsystem("ln -s $pwd $outdir/repo-overlay");
+
+if ($do_rebuild_tree and !$do_emancipate) {
+
+}
 
 if ($do_commit and defined($commit_message_file)) {
     chdir("$outdir/import");
