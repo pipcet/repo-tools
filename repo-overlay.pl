@@ -119,26 +119,23 @@ my %repo_master_cache;
 sub repo_master {
     my ($name) = @_;
 
-    if ($repo_master_cache{$name}) {
+    if (defined($repo_master_cache{$name})) {
 	return $repo_master_cache{$name};
-    } else {
-	if ($name eq "") {
-	    my $master = "$outdir/repo-overlay/";
+    }
 
-	    return $master;
-	}
-	my $master = readlink("$outdir/repos-by-name/$name/repo");
-	my $noprefix;
-	if (begins_with($master, "$pwd/", \$noprefix)) {
-	    $master = "$outdir/repo-overlay/$noprefix";
-	}
-
-	die "no master for $name" unless(defined($master));
-
-	$repo_master_cache{$name} = $master;
+    if ($name eq "") {
+	my $master = "$outdir/repo-overlay/";
 
 	return $master;
     }
+    my $master = readlink("$outdir/repos-by-name/$name/repo");
+    my $noprefix;
+
+    die "no master for $name" unless(defined($master));
+
+    $repo_master_cache{$name} = $master;
+
+    return $master;
 }
 
 sub setup_repo_links {
@@ -247,6 +244,12 @@ sub mkdirp {
 sub symlink_relative {
     my ($src, $dst) = @_;
     my $relsrc = abs2rel($src, dirname($dst));
+
+    my $noprefix;
+    if (begins_with($src, "$pwd/", \$noprefix)) {
+	$src = "$outdir/repo-overlay/$noprefix";
+    }
+
 
     mkdirp(dirname($dst)) or die "cannot make symlink $dst -> $relsrc";
 
