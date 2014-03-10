@@ -443,47 +443,48 @@ if (defined($apply) and defined($apply_repo)) {
     my %version = %{read_versions({})};
 
     my $repo = $apply_repo;
-    chdir($repo) or die;
-    if ($version{$repo} eq "") {
-	warn "no version for $repo"
-    } elsif (grep { $_ eq $version{$repo} } git_parents($apply)) {
-	warn "should be able to apply commit $apply to $apply_repo.";
-    } else {
-	my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
-	if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
-	    exit(0);
+    if (chdir($repo)) {
+	if ($version{$repo} eq "") {
+	    warn "no version for $repo"
+	} elsif (grep { $_ eq $version{$repo} } git_parents($apply)) {
+	    warn "should be able to apply commit $apply to $apply_repo.";
+	} else {
+	    my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
+	    if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
+		exit(0);
+	    }
+	    if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
+		nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
+		exit(0);
+		$msg .= "but all will be good in the future.\n";
+		die $msg;
+	    }
+	    if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
+		$msg .= "missing link for $repo\n";
+	    }
+
+	    $msg .= " repo ancestors:\n";
+	    $msg .= "".revparse($version{$repo}."")."\n";
+	    $msg .= "".revparse($version{$repo}."~1")."\n";
+	    $msg .= "".revparse($version{$repo}."~2")."\n";
+	    $msg .= "".revparse($version{$repo}."~3")."\n";
+	    $msg .= "".revparse($version{$repo}."~4")."\n";
+	    $msg .= " commit ancestors:\n";
+	    $msg .= "".revparse($apply."")."\n";
+	    $msg .= "".revparse($apply."~1")."\n";
+	    $msg .= "".revparse($apply."~2")."\n";
+	    $msg .= "".revparse($apply."~3")."\n";
+	    $msg .= "".revparse($apply."~4")."\n";
+
+	    $msg .= "\ngit log:\n";
+	    $msg .= `git log -1`;
+	    $msg .= "\ncommit file:\n";
+	    $msg .= `head -8 $commit_message_file`;
+
+	    $msg .= "\n\n\n";
+
+	    die($msg);
 	}
-	if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
-	    nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
-	    exit(0);
-	    $msg .= "but all will be good in the future.\n";
-	    die $msg;
-	}
-	if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
-	    $msg .= "missing link for $repo\n";
-	}
-
-	$msg .= " repo ancestors:\n";
-	$msg .= "".revparse($version{$repo}."")."\n";
-	$msg .= "".revparse($version{$repo}."~1")."\n";
-	$msg .= "".revparse($version{$repo}."~2")."\n";
-	$msg .= "".revparse($version{$repo}."~3")."\n";
-	$msg .= "".revparse($version{$repo}."~4")."\n";
-	$msg .= " commit ancestors:\n";
-	$msg .= "".revparse($apply."")."\n";
-	$msg .= "".revparse($apply."~1")."\n";
-	$msg .= "".revparse($apply."~2")."\n";
-	$msg .= "".revparse($apply."~3")."\n";
-	$msg .= "".revparse($apply."~4")."\n";
-
-	$msg .= "\ngit log:\n";
-	$msg .= `git log -1`;
-	$msg .= "\ncommit file:\n";
-	$msg .= `head -8 $commit_message_file`;
-
-	$msg .= "\n\n\n";
-
-	die($msg);
     }
 }
 chdir($pwd);
