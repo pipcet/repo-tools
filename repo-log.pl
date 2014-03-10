@@ -98,7 +98,7 @@ sub get {
 }
 
 sub new {
-    my ($class, $repo) = @_;
+    my ($class, $repo, $id) = @_;
     my $h = { };
 
     #if (system("(cd '$repo'; grep -q Quarx2k .git/config)")) {
@@ -108,6 +108,7 @@ sub new {
     $h->{commits} = [];
     $h->{n} = 0;
     $h->{repo} = $repo;
+    $h->{id} = $id;
     my $tformat;
     if ($do_just_shas) {
 	$tformat = "* $repo: %s %h by %an at %ci%n..Committer:%cn <%ce>%n..CommitDate:%ci%n..Author:%an <%ae>%n..AuthorDate:%ai%n..SHA:%H%n..%N%n..%s%n%w(0,1,1)%b%n%w(0,0,0)";
@@ -149,21 +150,23 @@ if (!@repos) {
 	    $prepo =~ s/\.git$//;
 	    my $repo;
 	    if (begins_with($prepo, "$dir/", \$repo)) {
-		push @repos, $repo;
+		push @repos, [$prepo, $repo =~ s/\/$//r ];
 	    }
 
 	}
     }
 }
-unshift @repos, (".repo/repo/", ".repo/manifests/");
-push @repos, split(/,/, join(",", @additional_repos)) if (@additional_repos);
+
+unshift @repos, ([".repo/repo/", ".repo/repo"], [".repo/manifests/", ".repo/manifests"]);
+push @repos, split(/,/, join(",", @additional_repos)) if (@additional_repos); #  XXX broken
 
 my %r;
 warn scalar(@repos) . " repos\n";
 for my $repo (@repos) {
-    my $r =  RepoStream->new($repo);
+    my ($repodir, $repoid) = @$repo;
+    my $r =  RepoStream->new($repodir, $repoid);
     if ($r) {
-	$r{$repo} = $r;
+	$r{$repodir} = $r;
     }
 }
 
@@ -202,12 +205,13 @@ while(1) {
 
 	if ($do_just_shas) {
 	    my $repo = $dates[0][2]->{repo};
+	    my $repoid = $repo->{id};
 	    my $entry = $dates[0][2]->get;
 
 	    my @msg;
 	    push @msg, "--commit-commitdate='" . $entry->{commitdate} . "'";
 	    push @msg, "--apply=" . $entry->{sha};
-	    push @msg, "--apply-repo=" . $repo;
+	    push @msg, "--apply-repo=" . $repoid;
 	    push @msg, "--commit-message-file=$commit_msg" if defined($commit_msg);
 	    push @msg, "--commit-authordate='".$entry->{authordate}."'";
 	    push @msg, "--commit-committer='".$entry->{committer}."'";
