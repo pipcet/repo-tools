@@ -122,21 +122,21 @@ sub prefix {
     return $ret;
 }
 
-my %repo_master_cache;
+my %repo_master_cache = ("" => "$pwd");
 sub repo_master {
     my ($name) = @_;
 
-    if (defined($repo_master_cache{$name})) {
+    if (exists($repo_master_cache{$name})) {
 	return $repo_master_cache{$name};
     }
 
     if ($name eq "") {
-	my $master = "$outdir/repo-overlay/";
+	my $master = "$pwd";
 
 	return $master;
     }
+
     my $master = readlink("$outdir/repos-by-name/$name/repo");
-    my $noprefix;
 
     die "no master for $name" unless(defined($master));
 
