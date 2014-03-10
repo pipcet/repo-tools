@@ -829,6 +829,8 @@ chdir($pwd);
 
 # perl ~/repo-tools/repo-log.pl --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do echo "$REPLY"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay"; done
 
+# perl ~/repo-tools/repo-log.pl --additional-dir=~/tmp-repo-overlay/other-repositories/ --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay"; done
+
 exit(0);
 
 # Local Variables:
