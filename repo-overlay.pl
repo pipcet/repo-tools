@@ -5,6 +5,7 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
+use Carp::Always;
 
 my $do_new_versions;
 my $do_new_symlinks;
