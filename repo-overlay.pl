@@ -106,11 +106,11 @@ sub setup_repo_links {
 	symlink_absolute("$pwd/" . $repo->{relpath}, $linkdir . "repo");
     }
 
-    my @other_repos = split(/\0/, `find $outdir/other-repos -name '.git' -prune -print0`);
+    my @other_repos = split(/\0/, `find $outdir/other-repositories -name '.git' -prune -print0`);
     map { s/\.git$// } @other_repos;
 
     for my $repo (@other_repos) {
-	my $name = substr($repo, length("$outdir/other-repos/"));
+	my $name = substr($repo, length("$outdir/other-repositories/"));
 	my $linkdir = "$outdir/repos-by-name/" . $name . "/";
 
 	mkdirp($linkdir);
