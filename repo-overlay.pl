@@ -777,7 +777,7 @@ if ($do_commit and defined($commit_message_file)) {
     if ($do_emancipate) {
 	nsystem("git add --all; git commit -m 'emancipation commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
+		(defined($commit_author) ? "--author '$commit_author' " : ""));
     } else {
 	nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
