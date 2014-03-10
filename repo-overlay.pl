@@ -11,6 +11,7 @@ my $do_new_symlinks;
 my $do_print_range;
 my $do_hardlink;
 my $do_commit;
+my $do_rebuild_tree;
 
 my $apply;
 my $apply_repo;
@@ -507,6 +508,11 @@ for my $repo (@repos) {
 
     if (!$items{$repo =~ s/\/$//r}{changed}) {
 	next;
+    }
+
+    if ($repo eq ".repo/manifests/") {
+	$do_rebuild_tree = 1;
+	warn "rebuild tree!"
     }
 
     git_walk_tree($repo, "", $head, $arg_recurse);
