@@ -99,17 +99,8 @@ sub repos_new {
     unshift @repos, ".repo/repo/";
     unshift @repos, ".repo/manifests/";
 
-    return @repos;
-}
-
-sub repos {
-    my @repos = split(/\0/, `find  -name '.git' -print0 -prune -o -name '.repo' -prune -o -path './out' -prune`);
-#pop(@repos);
-    map { chomp; s/\.git$//; } @repos;
-    map { s/^\.\///; } @repos;
-
-    unshift @repos, ".repo/repo/";
-    unshift @repos, ".repo/manifests/";
+    $repos{".repo/repo/"}{path} = "$outdir/.repo/repo/";
+    $repos{".repo/manifests/"}{path} = "$outdir/.repo/manifests/";
 
     return @repos;
 }
