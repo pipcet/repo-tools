@@ -245,7 +245,7 @@ sub git_walk_tree {
 
     my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -z`);
 
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ ]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
 
     for my $m (@modes) {
 	my $path = $m->{path};
