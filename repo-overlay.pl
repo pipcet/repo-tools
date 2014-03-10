@@ -122,9 +122,15 @@ sub repo_master {
     if ($repo_master_cache{$name}) {
 	return $repo_master_cache{$name};
     } else {
+	if ($name eq "") {
+	    my $master = "$outdir/repo-overlay/";
+
+	    return $master;
+	}
 	my $master = readlink("$outdir/repos-by-name/$name/repo");
-	if (begins_with($master, "$pwd/")) {
-	    $master = "$outdir/repo-overlay/" . substr($master, length($pwd)+1);
+	my $noprefix;
+	if (begins_with($master, "$pwd/", \$noprefix)) {
+	    $master = "$outdir/repo-overlay/$noprefix";
 	}
 
 	die "no master for $name" unless(defined($master));
