@@ -27,7 +27,7 @@ my $commit_commitdate;
 my $commit_committer;
 my $commit_authordate;
 my $commit_author;
-my $arg_recurse=1;
+my $arg_recurse=10;
 
 GetOptions(
     "hardlink!" => \$do_hardlink,
