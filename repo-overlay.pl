@@ -220,32 +220,7 @@ sub store_item {
 }
 
 sub git_walk_tree {
-    my ($repo, $gitpath, $head, $recurse) = @_;
-
-    if ($recurse == 0) {
-	# git ls-tree shows both files and directories, but doesn't
-	# recurse. git ls-tree -r recurses, but doesn't show
-	# directories. git ls-tree -dr recurses, but only shows
-	# directories. We want everything.
-	my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -ztr`);
-
-	my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^\t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $gitpath.(($gitpath eq "")?"":"/").$5 } } @lstree_lines;
-
-	for my $m (@modes) {
-	    my $path = $m->{path};
-	    if ($m->{extmode} eq "120") {
-		store_item({oldtype=>"link", repopath=>$repo.$path, repo=>$repo});
-	    } elsif ($m->{extmode} eq "100") {
-		store_item({oldtype=>"file", repopath=>$repo.$path, repo=>$repo});
-	    } elsif ($m->{extmode} eq "040") {
-		store_item({oldtype=>"dir", repopath=>$repo.$path, repo=>$repo});
-	    } else {
-		die "unknown mode";
-	    }
-	}
-
-	return;
-    }
+    my ($repo, $gitpath, $head) = @_;
 
     my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -z`);
 
@@ -261,7 +236,7 @@ sub git_walk_tree {
 	    store_item({oldtype=>"file", repopath=>$repo.$path, repo=>$repo});
 	} elsif ($m->{extmode} eq "040") {
 	    store_item({oldtype=>"dir", repopath=>$repo.$path, repo=>$repo});
-	    git_walk_tree($repo, $path, $head, $recurse - 1)
+	    git_walk_tree($repo, $path, $head)
 		if $items{$repo.$path}{changed};
 	} else {
 	    die "unknown mode";
@@ -534,7 +509,7 @@ for my $repo (@repos) {
 	warn "rebuild tree!"
     }
 
-    git_walk_tree($repo, "", $head, $arg_recurse);
+    git_walk_tree($repo, "", $head);
 }
 
 chdir($pwd);
