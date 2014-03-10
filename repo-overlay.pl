@@ -66,10 +66,15 @@ chomp($pwd);
 
 my %repos;
 
+sub setup_repo_links {
+    my $head_repos = repos_new("HEAD");
 
 
-sub repos_new {
+}
+
+sub repos {
     my ($version) = @_;
+    my $repos = { };
 
     if (! -d "$outdir/manifests/$version/manifests") {
 	nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
@@ -86,10 +91,10 @@ sub repos_new {
 
     for my $r (@res) {
 	my ($repopath, $manifest_name, $manifest_url, $manifest_revision) = @$r;
-	$repos{$repopath}{manifest_name} = $manifest_name;
-	$repos{$repopath}{manifest_url} = $manifest_url;
-	$repos{$repopath}{manifest_revision} = $manifest_revision;
-	$repos{$repopath}{path} = "$outdir/import/$repopath";
+	$repos->{$repopath}{manifest_name} = $manifest_name;
+	$repos->{$repopath}{manifest_url} = $manifest_url;
+	$repos->{$repopath}{manifest_revision} = $manifest_revision;
+	$repos->{$repopath}{path} = "$outdir/import/$repopath";
     }
 
     my @repos = map { $_->[0] } @res;
@@ -99,10 +104,13 @@ sub repos_new {
     unshift @repos, ".repo/repo/";
     unshift @repos, ".repo/manifests/";
 
-    $repos{".repo/repo/"}{path} = "$outdir/.repo/repo/";
-    $repos{".repo/manifests/"}{path} = "$outdir/.repo/manifests/";
+    $repos->{".repo/repo/"}{path} = "$outdir/.repo/repo/";
+    $repos->{".repo/manifests/"}{path} = "$outdir/.repo/manifests/";
 
-    return @repos;
+    $repos->{".repo/repo/"}{name} = ".repo/repo";
+    $repos->{".repo/manifests/"}{name} = ".repo/manifests";
+
+    return $repos;
 }
 
 # all ancestor directories of a path
@@ -212,6 +220,10 @@ sub store_item {
 
 sub git_walk_tree {
     my ($repo, $gitpath, $head) = @_;
+    my $repopath = $repos{$repo}{path};
+
+    chdir($pwd);
+    chdir($repopath);
 
     my @lstree_lines = split(/\0/, `git ls-tree '$head':'$gitpath' -z`);
 
@@ -249,24 +261,29 @@ if ($do_new_versions) {
 my %version;
 my %rversion;
 
-my $version_fh;
-open $version_fh, "cat /dev/null \$(find $outdir/import/.pipcet-ro/versions/ -name version.txt)|";
-while (<$version_fh>) {
-    chomp;
+sub read_versions {
+    my ($repos) = @_;
 
-    my $path;
-    my $head;
-    my $versioned_name;
+    my $version_fh;
 
-    if (($path, $head, $versioned_name) = /^(.*): (.*) (.*)$/) {
-	if ($head ne "") {
-	    $version{$path} = $head;
-	    $rversion{$head} = $path;
+    open $version_fh, "cat /dev/null \$(find $outdir/import/.pipcet-ro/versions/ -name version.txt)|";
+    while (<$version_fh>) {
+	chomp;
+
+	my $path;
+	my $head;
+	my $versioned_name;
+
+	if (($path, $head, $versioned_name) = /^(.*): (.*) (.*)$/) {
+	    if ($head ne "") {
+		$version{$path} = $head;
+		$rversion{$head} = $path;
+	    }
+	    $repos->{$path}{versioned_name} = $versioned_name;
 	}
-	$repos{$path}{versioned_name} = $versioned_name;
     }
+    close $version_fh;
 }
-close $version_fh;
 
 sub previous_commit {
     my ($head) = @_;
@@ -307,6 +324,8 @@ sub git_parents {
 }
 
 if ($do_print_range and defined($apply_repo)) {
+    read_versions({});
+
     chdir($pwd);
     chdir($apply_repo);
     print "$version{$apply_repo}.." . revparse("HEAD") . "\n";
@@ -317,9 +336,11 @@ if ($do_print_range and defined($apply_repo)) {
 if (defined($apply) and defined($apply_repo)) {
     die if $apply eq "";
 
+    read_versions({});
+
     my $repo = $apply_repo;
     chdir($repo) or die;
-    die if $version{$repo} eq "";
+    die "no version for $repo" if $version{$repo} eq "";
     if (grep { $_ eq $version{$repo} } git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
@@ -389,19 +410,23 @@ if ($do_new_symlinks or !defined($apply_repo)) {
     nsystem("rm -rf $outdir/export/" . ($apply_repo =~ s/\/$//r));
 }
 
-my @repos;
+my $repos;
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
     my $repo = ($apply_repo =~ s/\/*$/\//r);
 
-    $repos{$repo}{name} = $repos{$repo}{versioned_name};
-
-    @repos = ($repo);
+    $repos = { $repo => { name => $repos{$repo}{versioned_name} } };
 } else {
-    @repos = repos_new(get_head(".repo/manifests/"));
+    $repos = repos(get_head(".repo/manifests/"));
 
-    map { $repos{$_}{name} = $repos{$_}{manifest_name} } @repos;
+    for my $repo (values %repos) {
+	$repo->{name} = $repo->{manifest_name};
+    }
 }
+
+read_versions($repos);
+
+my @repos = sort keys %$repos;
 
 sub get_head {
     my ($repo) = @_;
