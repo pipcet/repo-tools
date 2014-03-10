@@ -45,7 +45,7 @@ GetOptions(
     "apply=s" => \$apply,
     "apply-repo=s" => \$apply_repo,
     "apply-repo-name=s" => \$apply_repo_name,
-    "apply-last-manifest" => \$apply_last_manifest,
+    "apply-use-manifest=s" => \$apply_last_manifest,
     "commit!" => \$do_commit,
     "commit-message-file=s" => \$commit_message_file,
     "commit-authordate=s" => \$commit_authordate,
@@ -546,7 +546,7 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     my $backrepos = repos($manifest);
     my $name = $backrepos->{$apply_repo}{manifest_name};
 
-    die "cannot resolve repo $apply_repo" if (!defined($name));
+    die "cannot resolve repo $apply_repo (manifest $manifest)" if (!defined($name));
 
     $apply_repo_name = $name;
     $repos->{$apply_repo} = $backrepos->{$apply_repo};
