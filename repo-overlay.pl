@@ -72,6 +72,27 @@ $repos->{".repo/manifests/"} = {
     gitpath => "$pwd/.repo/manifests/",
 };
 
+sub repos_get_gitpath {
+    my ($repos, $repo) = @_;
+    my $gitpath = $repos->{$repo}{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	my $url = $repos->{$repo}{manifest_url};
+
+	if (!($url=~/\/\//)) {
+	    # XXX why is this strange fix needed?
+	    $url = "https://github.com/" . $repos->{$repo}{name};
+	}
+
+	warn "no repository for " . $repos->{$repo}{name} . " url $url";
+
+	#system("git clone $url $outdir/other-repositories/" . $repos->{$repo}{name});
+	return undef;
+    }
+
+    return $gitpath;
+}
+
 sub setup_repo_links {
     system("rm -rf $outdir/manifests/HEAD");
     my $head_repos = repos("HEAD");
@@ -254,11 +275,9 @@ sub store_item {
 sub git_walk_tree {
     my ($repo, $itempath, $head) = @_;
     my $repopath = $repos->{$repo}{path};
-    my $gitpath = $repos->{$repo}{gitpath};
+    my $gitpath = repos_get_gitpath($repos, $repo);
 
-    if ($gitpath eq "" or ! -e $gitpath) {
-	die "no repository for " . $repo->{name};
-    }
+    die unless defined($gitpath);
     chdir($gitpath);
 
     my @lstree_lines = split(/\0/, `git ls-tree '$head':'$itempath' -z`);
@@ -466,12 +485,9 @@ sub get_head {
 
     $repos->{$repo}{repo} = $repo;
 
-    my $gitpath = $repos->{$repo}{gitpath};
+    my $gitpath = repos_get_gitpath($repos, $repo);
 
-    if ($gitpath eq "" or ! -e $gitpath) {
-	warn "no repository for " . $repos->{$repo}{name} . " / $repo: $gitpath";
-	return undef;
-    }
+    return undef unless defined($gitpath);
     chdir($gitpath);
 
     my $branch = `git log -1 --reverse --pretty=oneline --until='February 1'|cut -c -40`;
@@ -522,12 +538,9 @@ for my $repo (@repos) {
     my $oldhead = $repos->{$repo}{oldhead};
     my $newhead = $repos->{$repo}{newhead};
 
-    my $gitpath = $repos->{$repo}{gitpath};
+    my $gitpath = repos_get_gitpath($repos, $repo);
+    next unless defined($gitpath);
 
-    if ($gitpath eq "" or ! -e $gitpath) {
-	warn "no repository for " . $repos->{$repo}{name};
-	next;
-    }
     chdir($gitpath);
 
     store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
