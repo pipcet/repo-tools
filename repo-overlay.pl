@@ -158,7 +158,7 @@ sub setup_repo_links {
     map { s/\.git$// } @other_repos;
 
     for my $repo (@other_repos) {
-	my $name = substr($repo, length("$outdir/other-repositories/"));
+	my $name = prefix($repo, "$outdir/other-repositories/");
 	my $linkdir = "$outdir/repos-by-name/" . $name . "/";
 
 	mkdirp($linkdir);
@@ -292,8 +292,7 @@ sub store_item {
     $item->{changed} = 1 if $repopath eq "";
 
     $item->{gitpath} =~ s/\/*$//;
-
-    $item->{gitpath} = substr($repopath, length($item->{repo}));
+    $item->{gitpath} = prefix($repopath . "/", $item->{repo});
 
     my $olditem = $items{$repopath};
 
@@ -308,7 +307,7 @@ sub store_item {
 	}
 	$item = $olditem;
 	$item->{repo} = $repo;
-	$item->{gitpath} = substr($repopath, length($repo));
+	$item->{gitpath} = prefix($repopath . "/", $repo);
     } else {
 	$items{$repopath} = $item;
     }
@@ -595,9 +594,9 @@ for my $repo (@repos) {
 
     store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
     if (begins_with(repo_master($repos->{$repo}{name}), "$outdir/repo-overlay")) {
-	store_item({repopath=>dirname($repo), oldtype=>"dir", repo=>$repo});
+	store_item({repopath=>dirname($repo), oldtype=>"dir"});
     } else {
-	store_item({repopath=>dirname($repo), oldtype=>"dir", repo=>$repo, changed=>1});
+	store_item({repopath=>dirname($repo), oldtype=>"dir", changed=>1});
     }
 
     if (!defined($head)) {
