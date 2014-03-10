@@ -788,8 +788,6 @@ if ($do_commit and defined($commit_message_file)) {
     }
 }
 
-chdir($pwd);
-
 if ($apply_success or $do_new_versions) {
     for my $repo (@repos) {
 	my $version_fh;
@@ -799,7 +797,15 @@ if ($apply_success or $do_new_versions) {
 	print $version_fh "$repo: ".$version{$repo}." ".$repos->{$repo}{name}."\n";
 	close $version_fh;
     }
+
+    if ($do_commit and !$do_emancipate) {
+	nsystem("git add --all; git commit -m 'versioning commit for $apply' " .
+		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
+		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
+    }
 }
+
+chdir($pwd);
 
 # useful commands:
 #  repo-overlay.pl -- sync repository to export/ import/
