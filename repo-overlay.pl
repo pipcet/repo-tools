@@ -64,6 +64,9 @@ chdir($indir) or die;
 my $pwd = `pwd`;
 chomp($pwd);
 
+if (defined($commit_commitdate)) {
+    print "$commit_commitdate\n";
+}
 
 my $repos;
 
@@ -243,13 +246,11 @@ sub mkdirp {
 
 sub symlink_relative {
     my ($src, $dst) = @_;
-    my $relsrc = abs2rel($src, dirname($dst));
-
     my $noprefix;
     if (begins_with($src, "$pwd/", \$noprefix)) {
 	$src = "$outdir/repo-overlay/$noprefix";
     }
-
+    my $relsrc = abs2rel($src, dirname($dst));
 
     mkdirp(dirname($dst)) or die "cannot make symlink $dst -> $relsrc";
 
