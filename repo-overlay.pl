@@ -442,8 +442,9 @@ if (defined($apply) and defined($apply_repo)) {
 
     my $repo = $apply_repo;
     chdir($repo) or die;
-    die "no version for $repo" if $version{$repo} eq "";
-    if (grep { $_ eq $version{$repo} } git_parents($apply)) {
+    if ($version{$repo} eq "") {
+	warn "no version for $repo"
+    } elsif (grep { $_ eq $version{$repo} } git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
     } else {
 	my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
@@ -482,8 +483,8 @@ if (defined($apply) and defined($apply_repo)) {
 
 	die($msg);
     }
-    chdir($pwd);
 }
+chdir($pwd);
 
 unless ($do_new_symlinks) {
     chdir("$outdir/import");
