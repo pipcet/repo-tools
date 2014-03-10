@@ -248,9 +248,9 @@ sub symlink_relative {
     my ($src, $dst) = @_;
     my $relsrc = abs2rel($src, dirname($dst));
 
-    mkdirp(dirname($dst)) or die;
+    mkdirp(dirname($dst)) or die "cannot make symlink $dst -> $relsrc";
 
-    symlink($relsrc, $dst) or die;
+    symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
 }
 
 sub symlink_absolute {
@@ -291,8 +291,8 @@ sub store_item {
 
     $item->{changed} = 1 if $repopath eq "";
 
-    $item->{gitpath} =~ s/\/*$//;
     $item->{gitpath} = prefix($repopath . "/", $item->{repo});
+    $item->{gitpath} =~ s/\/*$//;
 
     my $olditem = $items{$repopath};
 
@@ -308,6 +308,7 @@ sub store_item {
 	$item = $olditem;
 	$item->{repo} = $repo;
 	$item->{gitpath} = prefix($repopath . "/", $repo);
+	$item->{gitpath} =~ s/\/*$//;
     } else {
 	$items{$repopath} = $item;
     }
@@ -607,7 +608,7 @@ for my $repo (@repos) {
 
     my %diffstat;
     if ($oldhead eq $newhead) {
-	#%diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+	%diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
     } else {
 	%diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
     }
