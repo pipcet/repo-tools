@@ -67,9 +67,28 @@ chomp($pwd);
 my %repos;
 
 sub setup_repo_links {
-    my $head_repos = repos_new("HEAD");
+    system("rm -rf $outdir/manifests/HEAD");
+    my $head_repos = repos("HEAD");
 
+    system("rm -rf $outdir/repos-by-name");
+    for my $repo (values %$head_repos) {
+	my $name = $repo->{manifest_name} // $repo->{name};
+	my $linkdir = "$outdir/repos-by-name/" . $name . "/";
 
+	mkdirp($linkdir);
+	symlink_absolute("$pwd/" . $repo->{relpath}, $linkdir . "repo");
+    }
+
+    my @other_repos = split(/\0/, `find $outdir/other-repos -name '.git' -prune -print0`);
+    map { s/\.git$// } @other_repos;
+
+    for my $repo (@other_repos) {
+	my $name = substr($repo, length("$outdir/other-repos/"));
+	my $linkdir = "$outdir/repos-by-name/" . $name . "/";
+
+	mkdirp($linkdir);
+	symlink_absolute($repo, $linkdir . "repo");
+    }
 }
 
 sub repos {
@@ -91,6 +110,7 @@ sub repos {
 
     for my $r (@res) {
 	my ($repopath, $manifest_name, $manifest_url, $manifest_revision) = @$r;
+	$repos->{$repopath}{relpath} = $repopath;
 	$repos->{$repopath}{manifest_name} = $manifest_name;
 	$repos->{$repopath}{manifest_url} = $manifest_url;
 	$repos->{$repopath}{manifest_revision} = $manifest_revision;
@@ -109,6 +129,9 @@ sub repos {
 
     $repos->{".repo/repo/"}{name} = ".repo/repo";
     $repos->{".repo/manifests/"}{name} = ".repo/manifests";
+
+    $repos->{".repo/repo/"}{relpath} = ".repo/repo/";
+    $repos->{".repo/manifests/"}{relpath} = ".repo/manifests/";
 
     return $repos;
 }
@@ -156,7 +179,7 @@ sub symlink_absolute {
 
     mkdirp(dirname($dst)) or die;
 
-    symlink($src, $dst) or die;
+    symlink($src, $dst) or die "cannot make symlink $dst -> $src";
 }
 
 sub copy_or_hardlink {
@@ -426,6 +449,16 @@ if (defined($apply) and defined($apply_repo) and
 
 read_versions($repos);
 
+if (defined($apply) and defined($apply_repo) and
+    !$do_new_symlinks and !$do_new_versions) {
+    #XXX
+    $repos->{$apply_repo}{name} = $repos->{$apply_repo}{versioned_name};
+}
+
+if ($do_new_symlinks) {
+    setup_repo_links();
+}
+
 my @repos = sort keys %$repos;
 
 sub get_head {
@@ -621,6 +654,8 @@ chdir($pwd);
 
 if ($apply_success or $do_new_versions) {
     for my $repo (@repos) {
+	my $version_fh;
+
 	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
 	print $version_fh "$repo: ".$version{$repo}." $repos{$repo}{name}\n";
