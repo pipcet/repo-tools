@@ -597,7 +597,7 @@ for my $repo (@repos) {
     chdir($gitpath);
 
     store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
-    if (begins_with(repo_master($repos->{$repo}{name}), "$outdir/repo-overlay")) {
+    if (begins_with(repo_master($repos->{$repo}{name}), "$pwd/")) {
 	store_item({repopath=>dirname($repo), oldtype=>"dir"});
     } else {
 	store_item({repopath=>dirname($repo), oldtype=>"dir", changed=>1});
