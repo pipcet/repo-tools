@@ -771,10 +771,6 @@ copy_or_hardlink("$pwd/Makefile", "$outdir/export/") or die;
 # doesn't get confused about which relative path to use.
 nsystem("ln -s $pwd $outdir/repo-overlay") or die;
 
-if ($do_rebuild_tree and !$do_emancipate) {
-
-}
-
 if ($do_commit and defined($commit_message_file)) {
     chdir("$outdir/import");
     if ($do_emancipate) {
