@@ -785,17 +785,17 @@ if ($do_commit and defined($commit_message_file)) {
     }
 }
 
-if ($apply_success or $do_new_versions) {
+if ($apply_success or $do_new_versions and !$do_emancipate) {
     for my $repo (@repos) {
 	my $version_fh;
 
 	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$version{$repo}." ".$repos->{$repo}{name}."\n";
+	print $version_fh "$repo: ".$repos->{$repo}{head}." ".$repos->{$repo}{name}."\n";
 	close $version_fh;
     }
 
-    if ($do_commit and !$do_emancipate) {
+    if ($do_commit) {
 	nsystem("git add --all; git commit -m 'versioning commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
