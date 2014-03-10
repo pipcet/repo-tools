@@ -2,10 +2,14 @@
 
 use Getopt::Long qw(:config auto_version auto_help);
 
+use strict;
+
 my $do_just_shas;
 my $commit_dir;
-my $since_date = "2.months.ago";
+my $since_date = "January.20";
 my @repos;
+my @additional_repos;
+my @additional_dirs;
 my $range;
 my $sha2log;
 GetOptions(
@@ -13,6 +17,8 @@ GetOptions(
     "commit-dir=s" => \$commit_dir,
     "since=s" => \$since_date,
     "repo=s" => \@repos,
+    "additional-repo=s" => \@additional_repos,
+    "additional-dir=s" => \@additional_dirs,
     "range=s" => \$range,
     "sha2log=s" => \$sha2log,
     );
@@ -124,12 +130,33 @@ sub new {
 
 package main;
 
-if (!@repos) {
-    @repos = split(/\0/, `find  -name '.git' -print0 -o -name '.repo' -prune -o -path './out' -prune`);
+sub begins_with {
+    my ($a,$b,$noprefix) = @_;
+
+    my $ret = substr($a, 0, length($b)) eq $b;
+
+    if ($ret and $noprefix) {
+	$$noprefix = substr($a, length($b));
+    }
+
+    return $ret;
 }
-#pop(@repos);
+
+if (!@repos) {
+    for my $dir (".", @additional_dirs) {
+	my @prepos = split(/\0/, `find $dir -name '.git' -print0 -o -name '.repo' -prune -o -path './out' -prune`);
+	for my $prepo (@prepos) {
+	    $prepo =~ s/\.git$//;
+	    my $repo;
+	    if (begins_with($prepo, "$dir/", \$repo)) {
+		push @repos, $repo;
+	    }
+
+	}
+    }
+}
 unshift @repos, (".repo/repo/", ".repo/manifests/");
-map { chomp; s/\.git$//; s/^\.\///; } @repos;
+push @repos, split(/,/, join(",", @additional_repos)) if (@additional_repos);
 
 my %r;
 warn scalar(@repos) . " repos\n";
@@ -141,6 +168,8 @@ for my $repo (@repos) {
 }
 
 print " -*- mode: Diff; eval: (orgstruct++-mode 1); -*-\n" unless $do_just_shas;
+
+my $last_manifest;
 
 while(1) {
     my @dates = sort { $b->[0] <=> $a->[0] } map { [$_->[0]{rawdate}, $_->[0], $_->[1]] } grep { defined($_->[0]) } map { [$_->peek, $_] } values(%r);
@@ -165,6 +194,7 @@ while(1) {
 	    if (($l = length($cooked)) > 10000) {
 		$cooked = substr($cooked, 0, 10000) . "\n" . ($l-10000) . " bytes skipped\n"
 	    }
+	    my $fh;
 	    open $fh, ">$commit_msg";
 	    print $fh $cooked;
 	    close $fh;
@@ -173,7 +203,22 @@ while(1) {
 	if ($do_just_shas) {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
-	    print "--commit-commitdate='" . $entry->{commitdate} . "' --apply=" . $entry->{sha} . " --apply-repo=" . $repo . (defined($commit_msg) ? " --commit-message-file=$commit_msg":"") . " --commit-authordate='".$entry->{authordate}."' --commit-committer='".$entry->{committer}."' --commit-author='" . $entry->{author} . "'\n";
+
+	    my @msg;
+	    push @msg, "--commit-commitdate='" . $entry->{commitdate} . "'";
+	    push @msg, "--apply=" . $entry->{sha};
+	    push @msg, "--apply-repo=" . $repo;
+	    push @msg, "--commit-message-file=$commit_msg" if defined($commit_msg);
+	    push @msg, "--commit-authordate='".$entry->{authordate}."'";
+	    push @msg, "--commit-committer='".$entry->{committer}."'";
+	    push @msg, "--commit-author='" . $entry->{author} . "'";
+	    push @msg, "--apply-use-manifest=" . $last_manifest if defined($last_manifest);
+
+	    print join(" ", @msg) . "\n";
+
+	    if ($repo eq ".repo/manifests") {
+		$last_manifest = $entry->{sha};
+	    }
 	} else {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
