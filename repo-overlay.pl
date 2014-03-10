@@ -95,9 +95,24 @@ sub repos_get_gitpath {
 }
 
 sub begins_with {
-    my ($a,$b);
+    my ($a,$b,$noprefix) = @_;
 
-    return substr($a,length($b)) eq $b;
+    my $ret = substr($a, 0, length($b)) eq $b;
+
+    if ($ret and $noprefix) {
+	$$noprefix = substr($a, length($b));
+    }
+
+    return $ret;
+}
+
+sub prefix {
+    my ($a, $b) = @_;
+    my $ret;
+
+    die unless begins_with($a, $b, \$ret);
+
+    return $ret;
 }
 
 my %repo_master_cache;
