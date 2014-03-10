@@ -81,11 +81,11 @@ sub repos_new {
     map { $_->[0] =~ s/\/*$/\//; } @res;
 
     for my $r (@res) {
-	print join(", ", @$r)."\n";
 	my ($repopath, $manifest_name, $manifest_url, $manifest_revision) = @$r;
 	$repos{$repopath}{manifest_name} = $manifest_name;
 	$repos{$repopath}{manifest_url} = $manifest_url;
 	$repos{$repopath}{manifest_revision} = $manifest_revision;
+	$repos{$repopath}{path} = "$outdir/import/$repopath";
     }
 
     my @repos = map { $_->[0] } @res;
