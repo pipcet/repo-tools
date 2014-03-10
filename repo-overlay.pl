@@ -94,6 +94,12 @@ sub repos_get_gitpath {
     return $gitpath;
 }
 
+sub begins_with {
+    my ($a,$b);
+
+    return substr($a,length($b)) eq $b;
+}
+
 my %repo_master_cache;
 sub repo_master {
     my ($name) = @_;
@@ -102,6 +108,9 @@ sub repo_master {
 	return $repo_master_cache{$name};
     } else {
 	my $master = readlink("$outdir/repos-by-name/$name/repo");
+	if (begins_with($master, "$pwd/")) {
+	    $master = "$outdir/repo-overlay/" . substr($master, length($pwd)+1);
+	}
 
 	die "no master for $name" unless(defined($master));
 
@@ -258,6 +267,8 @@ sub store_item {
 
     $item->{repopath} =~ s/\/*$//;
     my $repopath = $item->{repopath};
+
+    $item->{changed} = 1 if $repopath eq "";
 
     $item->{gitpath} =~ s/\/*$//;
 
@@ -561,7 +572,12 @@ for my $repo (@repos) {
 
     chdir($gitpath);
 
-    store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo, changed=>1});
+    store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
+    if (begins_with(repo_master($repos->{$repo}{name}), "$outdir/repo-overlay")) {
+	store_item({repopath=>dirname($repo), oldtype=>"dir", repo=>$repo});
+    } else {
+	store_item({repopath=>dirname($repo), oldtype=>"dir", repo=>$repo, changed=>1});
+    }
 
     if (!defined($head)) {
 	store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
@@ -642,7 +658,7 @@ for my $item (values %items) {
 
 	if (!$items{$dir}{changed}) {
 	    if (! (-e "import/$dir" || -l "import/$dir")) {
-		symlink_relative(repo_master($repos->{$repo}{name}) . "/$dir", "import/$dir") or die;
+		symlink_relative(repo_master($repos->{$repo}{name}) . "/$gitpath", "import/$dir") or die;
 	    }
 	} else {
 	    mkdirp("import/$dir")
@@ -659,7 +675,7 @@ for my $item (values %items) {
 
 	if (!$items{$dir}{changed}) {
 	    if (! (-e "export/$dir" || -l "export/$dir")) {
-		symlink_relative(repo_master($repos->{$repo}{name}) . "/$dir", "export/$dir") or die;
+		symlink_relative(repo_master($repos->{$repo}{name}) . "/$gitpath", "export/$dir") or die;
 	    }
 	} else {
 	    mkdirp("import/$dir")
