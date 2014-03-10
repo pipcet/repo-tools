@@ -273,14 +273,14 @@ sub copy_or_hardlink {
 }
 
 sub cat_file {
-    my ($repo, $branch, $file, $dst) = @_;
+    my ($master, $branch, $file, $dst) = @_;
 
     mkdirp(dirname($dst)) or die;
 
     if ($branch ne "") {
-	nsystem("(cd $pwd/$repo; git cat-file blob '$branch':'$file') > $dst") or die;
+	nsystem("(cd $master; git cat-file blob '$branch':'$file') > $dst") or die;
     } else {
-	nsystem("cat $pwd/$repo/$file > $dst") or die;
+	nsystem("cat $master/$file > $dst") or die;
     }
 }
 
@@ -709,7 +709,7 @@ for my $item (values %items) {
 	my $file = $gitpath;
 
 	if ($item->{changed} or $repos->{$repo}{name} eq "") {
-	    cat_file($repo, $head, $file, "import/$repo$file");
+	    cat_file(repo_master($repos->{$repo}{name}, 1), $head, $file, "import/$repo$file");
 	} else {
 	    symlink_relative(repo_master($repos->{$repo}{name}) . "/$file", "import/$repo$file") or die;
 	}
