@@ -220,7 +220,7 @@ while(1) {
 
 	    print join(" ", @msg) . "\n";
 
-	    if ($repo eq ".repo/manifests") {
+	    if ($repo eq ".repo/manifests/") {
 		$last_manifest = $entry->{sha};
 		warn "manifest updated to $last_manifest";
 	    }
