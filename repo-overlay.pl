@@ -243,7 +243,7 @@ sub store_item {
 
 sub git_walk_tree {
     my ($repo, $gitpath, $head) = @_;
-    my $repopath = $repos{$repo}{path};
+    my $repopath = $repos->{$repo}{path};
 
     chdir($pwd);
     chdir($repopath);
@@ -436,9 +436,6 @@ if ($do_new_symlinks or !defined($apply_repo)) {
 my $repos;
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
-    my $repo = ($apply_repo =~ s/\/*$/\//r);
-
-    $repos = { $repo => { name => $repos{$repo}{versioned_name} } };
 } else {
     $repos = repos(get_head(".repo/manifests/"));
 
@@ -464,9 +461,9 @@ my @repos = sort keys %$repos;
 sub get_head {
     my ($repo) = @_;
 
-    return $repos{$repo}{head} if defined($repos{$repo}{head});
+    return $repos->{$repo}{head} if defined($repos->{$repo}{head});
 
-    $repos{$repo}{repo} = $repo;
+    $repos->{$repo}{repo} = $repo;
     chdir($pwd);
     chdir($repo) or return undef;
     my $branch = `git log -1 --reverse --pretty=oneline --until='February 1'|cut -c -40`;
@@ -501,9 +498,9 @@ sub get_head {
     }
 
     $version{$repo} = $head;
-    $repos{$repo}{head} = $head;
-    $repos{$repo}{oldhead} = $oldhead;
-    $repos{$repo}{newhead} = $newhead;
+    $repos->{$repo}{head} = $head;
+    $repos->{$repo}{oldhead} = $oldhead;
+    $repos->{$repo}{newhead} = $newhead;
 
     chdir($pwd);
 
@@ -514,8 +511,8 @@ store_item({repopath=>"", changed=>1});
 store_item({repopath=>".", changed=>1});
 for my $repo (@repos) {
     my $head = get_head($repo);
-    my $oldhead = $repos{$repo}{oldhead};
-    my $newhead = $repos{$repo}{newhead};
+    my $oldhead = $repos->{$repo}{oldhead};
+    my $newhead = $repos->{$repo}{newhead};
 
     chdir($pwd);
     chdir($repo);
@@ -524,7 +521,7 @@ for my $repo (@repos) {
 
     if (!defined($head)) {
 	store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
-	$repos{$repo}{deleted} = 1;
+	$repos->{$repo}{deleted} = 1;
 	next;
     }
 
@@ -581,14 +578,14 @@ for my $item (values %items) {
 chdir($outdir);
 for my $item (values %items) {
     my $repo = $item->{repo};
-    next unless defined($repos{$repo}{head}) or $do_new_symlinks;
+    next unless defined($repos->{$repo}{head}) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
     next unless $items{dirname($repopath)}{changed};
     my $gitpath = $item->{gitpath};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
-    my $head = $repos{$repo}{head};
+    my $head = $repos->{$repo}{head};
 
     if ($oldtype eq "dir") {
 	my $dir = $repopath;
@@ -658,7 +655,7 @@ if ($apply_success or $do_new_versions) {
 
 	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$version{$repo}." $repos{$repo}{name}\n";
+	print $version_fh "$repo: ".$version{$repo}." ".$repos->{$repo}{name}."\n";
 	close $version_fh;
     }
 }
