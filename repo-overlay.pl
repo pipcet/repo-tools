@@ -300,7 +300,7 @@ sub git_walk_tree {
 
     my @lstree_lines = split(/\0/, `git ls-tree '$head':'$itempath' -z`);
 
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $repopath.(($repopath eq "")?"":"/").$5 } } @lstree_lines;
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $itempath.(($itempath eq "")?"":"/").$5 } } @lstree_lines;
 
     for my $m (@modes) {
 	my $path = $m->{path};
@@ -478,7 +478,7 @@ if (defined($apply) and defined($apply_repo) and
     $repos = repos(get_head(".repo/manifests/"));
 
     for my $repo (values %$repos) {
-	$repo->{name} = $repo->{manifest_name};
+	$repo->{name} = $repo->{manifest_name} // $repo->{name};
     }
 }
 
@@ -561,7 +561,7 @@ for my $repo (@repos) {
 
     chdir($gitpath);
 
-    store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
+    store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo, changed=>1});
 
     if (!defined($head)) {
 	store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
@@ -657,32 +657,35 @@ for my $item (values %items) {
 
 	if (!$items{$dir}{changed}) {
 	    if (! (-e "export/$dir" || -l "export/$dir")) {
-		symlink_relative("$outdir/repo-overlay/$dir", "export/$dir") or die;
+		symlink_relative(repo_master($repos->{$repo}{name}) . "/$dir", "export/$dir") or die;
 	    }
+	} else {
+	    mkdirp("import/$dir")
 	}
     }
     if ($oldtype eq "file") {
 	my $file = $gitpath;
 
-	if ($item->{changed}) {
+	if ($item->{changed} or $repos->{$repo}{name} eq "") {
 	    cat_file($repo, $head, $file, "import/$repo$file");
 	} else {
-	    symlink_relative("$outdir/repo-overlay/$repo$file", "import/$repo$file") or die;
+	    symlink_relative(repo_master($repos->{$repo}{name}) . "/$file", "import/$repo$file") or die;
 	}
     }
     if ($type eq "file") {
 	my $file = $gitpath;
 
-	if ($item->{changed}) {
+	if ($item->{changed} or $repos->{$repo}{name} eq "") {
 	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
 	} else {
-	    symlink_relative("$outdir/repo-overlay/$repo$file", "export/$repo$file") or die;
+	    symlink_relative(repo_master($repos->{$repo}{name}) . "/$file", "export/$repo$file") or die;
 	}
     }
     if ($oldtype eq "link") {
 	my $file = $gitpath;
-
-	symlink_absolute(`(cd $pwd/$repo; git cat-file blob '$head':'$file')`, "import/$repo$file") or die;
+	my $dest = `(cd $pwd/$repo; git cat-file blob '$head':'$file')`;
+	chomp($dest);
+	symlink_absolute($dest, "import/$repo$file") or die;
     }
     if ($type eq "link") {
 	my $file = $gitpath;
