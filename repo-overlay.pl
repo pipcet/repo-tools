@@ -12,6 +12,8 @@ my $do_print_range;
 my $do_hardlink;
 my $do_commit;
 my $do_rebuild_tree;
+my $do_emancipate;
+my $do_de_emancipate;
 
 my $apply;
 my $apply_repo;
@@ -46,6 +48,8 @@ GetOptions(
     "commit-commitdate=s" => \$commit_commitdate,
     "commit-committer=s" => \$commit_committer,
     "recurse=i" => \$arg_recurse,
+    "emancipate!" => \$do_emancipate,
+    "de-emancipate!" => \$do_de_emancipate,
     ) or die;
 
 $apply_repo =~ s/\/*$/\//;
@@ -459,17 +463,23 @@ sub get_head {
     }
 
     my $oldhead = $head;
+    my $newhead = $head;
 
     if (defined($apply)) {
 	if (grep { $_ eq $head } git_parents($apply)) {
-	    $head = $apply;
+	    $newhead = $apply;
 	    warn "successfully applied $apply to $repo";
 	    $apply_success = 1;
 	}
     }
+    if (!$do_emancipate) {
+	$head = $newhead;
+    }
+
     $version{$repo} = $head;
     $repos{$repo}{head} = $head;
     $repos{$repo}{oldhead} = $oldhead;
+    $repos{$repo}{newhead} = $newhead;
 
     chdir($pwd);
 
@@ -481,6 +491,7 @@ store_item({repopath=>".", changed=>1});
 for my $repo (@repos) {
     my $head = get_head($repo);
     my $oldhead = $repos{$repo}{oldhead};
+    my $newhead = $repos{$repo}{newhead};
 
     chdir($pwd);
     chdir($repo);
@@ -494,10 +505,10 @@ for my $repo (@repos) {
     }
 
     my %diffstat;
-    if ($oldhead eq $head) {
-	%diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+    if ($oldhead eq $newhead) {
+	#%diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
     } else {
-	%diffstat = reverse split(/\0/, `git diff $oldhead..$head --name-status -z`);
+	%diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
     }
 
     for my $path (keys %diffstat) {
@@ -637,9 +648,15 @@ nsystem("ln -s $pwd $outdir/repo-overlay");
 
 if ($do_commit and defined($commit_message_file)) {
     chdir("$outdir/import");
-    nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
-	    (defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-	    (defined($commit_author) ? "--author '$commit_author' " : ""));
+    if ($do_emancipate) {
+	nsystem("git add --all; git commit --allow-empty -m 'emancipation commit for $apply' " .
+		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
+		(defined($commit_author) ? "--author '$commit_author' " : ""));
+    } else {
+	nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
+		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
+		(defined($commit_author) ? "--author '$commit_author' " : ""));
+    }
 }
 
 # useful commands:
@@ -650,6 +667,10 @@ if ($do_commit and defined($commit_message_file)) {
 # perl ~/repo-tools/repo-overlay.pl --new-symlinks --new-versions --out=/home/pip/tmp-repo-overlay
 # perl ~/repo-tools/repo-log.pl --just-shas|tac|while read && echo $REPLY && sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay"; do true; done
 # perl ~/repo-tools/repo-log.pl --just-shas|tac|while read; do echo $REPLY; sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay"; done
+
+# perl ~/repo-tools/repo-log.pl --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do echo "$REPLY"; sh -c "perl ~/repo-tools/repo-overlay.pl --emancipate $REPLY --out=/home/pip/tmp-repo-overlay"; sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay"; done
+
+# perl ~/repo-tools/repo-log.pl --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do echo "$REPLY"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay"; done
 
 exit(0);
 
