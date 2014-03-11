@@ -689,7 +689,8 @@ sub get_head {
 store_item({repopath=>"", changed=>1});
 store_item({repopath=>".", changed=>1});
 
-for my $repo (@repos) {
+sub scan_repo {
+    my ($repo) = @_;
     my $head = get_head($repos, $repo);
     my $oldhead = $repos->{$repo}{oldhead};
     my $newhead = $repos->{$repo}{newhead};
@@ -770,6 +771,10 @@ for my $repo (@repos) {
     }
 
     git_walk_tree($repo, "", $head);
+}
+
+for my $repo (@repos) {
+    scan_repo($repo);
 }
 
 chdir($pwd);
