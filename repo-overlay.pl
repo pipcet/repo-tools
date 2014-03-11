@@ -889,7 +889,7 @@ if ($do_commit and defined($commit_message_file)) {
     }
 }
 
-if ($apply_success or $do_new_versions and !$do_emancipate) {
+if (($apply_success or $do_new_versions) and !$do_emancipate) {
     for my $repo (@repos) {
 	my $version_fh;
 
