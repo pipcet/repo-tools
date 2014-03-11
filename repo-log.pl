@@ -98,7 +98,7 @@ sub get {
 }
 
 sub new {
-    my ($class, $repo, $id) = @_;
+    my ($class, $repo, $id, $name) = @_;
     my $h = { };
 
     #if (system("(cd '$repo'; grep -q Quarx2k .git/config)")) {
@@ -109,6 +109,7 @@ sub new {
     $h->{n} = 0;
     $h->{repo} = $repo;
     $h->{id} = $id;
+    $h->{name} = $name;
     my $tformat;
     if ($do_just_shas) {
 	$tformat = "* $repo: %s %h by %an at %ci%n..Committer:%cn <%ce>%n..CommitDate:%ci%n..Author:%an <%ae>%n..AuthorDate:%ai%n..SHA:%H%n..%N%n..%s%n%w(0,1,1)%b%n%w(0,0,0)";
@@ -150,21 +151,24 @@ if (!@repos) {
 	    $prepo =~ s/\.git$//;
 	    my $repo;
 	    if (begins_with($prepo, "$dir/", \$repo)) {
-		push @repos, [$prepo, $repo =~ s/\/$//r ];
+		push @repos, [$prepo, $repo =~ s/\/$//r, $dir eq "." ? undef : $repo =~ s/\/$//r];
+	    } else {
+		die "mismatch: $prepo $dir"
 	    }
-
 	}
     }
 }
 
-unshift @repos, ([".repo/repo/", ".repo/repo"], [".repo/manifests/", ".repo/manifests"]);
+unshift @repos, (
+    [".repo/repo/", ".repo/repo", undef],
+    [".repo/manifests/", ".repo/manifests", undef]);
 push @repos, split(/,/, join(",", @additional_repos)) if (@additional_repos); #  XXX broken
 
 my %r;
 warn scalar(@repos) . " repos\n";
 for my $repo (@repos) {
-    my ($repodir, $repoid) = @$repo;
-    my $r =  RepoStream->new($repodir, $repoid);
+    my ($repodir, $repoid, $reponame) = @$repo;
+    my $r =  RepoStream->new($repodir, $repoid, $reponame);
     if ($r) {
 	$r{$repodir} = $r;
     }
