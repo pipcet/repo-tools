@@ -348,8 +348,16 @@ sub git_inter_diff {
     chdir($temp);
 
     nsystem("git init");
-    nsystem("git fetch $gitpath_a $rev_a:a");
-    nsystem("git fetch $gitpath_b $rev_b:b");
+    if ($gitpath_a ne "") {
+	nsystem("git fetch $gitpath_a $rev_a:a");
+    } else {
+	nsystem("git checkout master; git checkout -b a");
+    }
+    if ($gitpath_b ne "") {
+	nsystem("git fetch $gitpath_b $rev_b:b");
+    } else {
+	nsystem("git checkout master; git checkout -b b");
+    }
 
     my %diffstat = reverse split(/\0/, `git diff a b --name-status -z`);
 
