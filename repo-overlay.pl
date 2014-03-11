@@ -332,6 +332,26 @@ sub store_item {
     }
 }
 
+# like git diff, but between two repositories
+sub git_inter_diff {
+    my ($gitpath_a, $rev_a, $gitpath_b, $rev_b) = @_;
+    my $temp = "/home/pip/tmp"; #XXX
+
+    nsystem("rm -rf $temp");
+
+    mkdir($temp);
+
+    chdir($temp);
+
+    nsystem("git init");
+    nsystem("git fetch $gitpath_a $rev_a:a");
+    nsystem("git fetch $gitpath_b $rev_b:b");
+
+    my %diffstat = reverse split(/\0/, `git diff a b --name-status -z`);
+
+    return \%diffstat;
+}
+
 sub git_walk_tree {
     my ($repo, $itempath, $head) = @_;
     my $repopath = $repos->{$repo}{path};
