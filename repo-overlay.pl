@@ -206,17 +206,21 @@ sub repos {
     unshift @repos, ".repo/repo/";
     unshift @repos, ".repo/manifests/";
 
-    $repos->{".repo/repo/"}{path} = "$outdir/.repo/repo/";
-    $repos->{".repo/manifests/"}{path} = "$outdir/.repo/manifests/";
+    $repos->{".repo/repo/"} = {
+	path => "$outdir/.repo/repo/",
+	gitpath => "$outdir/repos-by-name/.repo/repo/repo",
+	name => ".repo/repo",
+	relpath => ".repo/repo/",
+	manifest_name => ".repo/repo",
+    };
 
-    $repos->{".repo/repo/"}{gitpath} = "$outdir/repos-by-name/.repo/repo/repo";
-    $repos->{".repo/manifests/"}{gitpath} = "$outdir/repos-by-name/.repo/manifests/repo";
-
-    $repos->{".repo/repo/"}{name} = ".repo/repo";
-    $repos->{".repo/manifests/"}{name} = ".repo/manifests";
-
-    $repos->{".repo/repo/"}{relpath} = ".repo/repo/";
-    $repos->{".repo/manifests/"}{relpath} = ".repo/manifests/";
+    $repos->{".repo/manifests/"} = {
+	path => "$outdir/.repo/manifests/",
+	gitpath => "$outdir/repos-by-name/.repo/manifests/repo",
+	name => ".repo/manifests",
+	relpath => ".repo/manifests/",
+	manifest_name => ".repo/manifests",
+    };
 
     return $repos;
 }
