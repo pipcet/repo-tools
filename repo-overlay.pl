@@ -883,6 +883,7 @@ if ($do_commit and defined($commit_message_file)) {
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : ""));
     } else {
+	nsystem("git commit --allow-empty -m 'COMMITTING REPO CHANGES'") if ($apply_repo eq ".repo/manifests/");
 	nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
