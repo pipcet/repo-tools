@@ -743,12 +743,15 @@ sub scan_repo {
 	warn "rebuild tree! $apply_repo";
 	my $new_repos = repos($apply);
 
+	chdir($pwd);
+	chdir($repo);
+	my $date = `git log -1 --pretty=tformat:\%ci $apply`;
+	warn "date is $date";
+
 	for my $repo (keys %$new_repos) {
 	    if ($new_repos->{$repo}{manifest_name} ne
 		$repos->{$repo}{manifest_name}) {
 		warn "tree rb: $repo changed from " . $repos->{$repo}{manifest_name} . " to " . $new_repos->{$repo}{manifest_name};
-		my $date = `git log -1 --pretty=tformat:\%ci $apply`;
-		warn "date is $date";
 		my $diffstat =
 		    git_inter_diff($repos->{$repo}{gitpath}, $repos->{$repo}{head},
 				   $new_repos->{$repo}{gitpath}, get_head($new_repos, $repo, $date));
@@ -766,6 +769,8 @@ sub scan_repo {
 			die "$stat $path";
 		    }
 		}
+
+		scan_repo($repo);
 	    }
 	}
     }
