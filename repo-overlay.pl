@@ -770,6 +770,7 @@ sub scan_repo {
 		    }
 		}
 
+		nsystem("rm -rf $outdir/import/$repo") unless $repo =~ /^\/*$/;
 		scan_repo($repo);
 	    }
 	}
