@@ -496,6 +496,9 @@ sub check_apply {
 
     my $repo = $apply_repo;
     if (chdir($repo)) {
+	if (!defined(revparse($apply))) {
+	    die "commit $apply isn't in $repo.";
+	}
 	if ($version{$repo} eq "") {
 	    warn "no version for $repo"
 	} elsif (grep { $_ eq $version{$repo} } git_parents($apply)) {
