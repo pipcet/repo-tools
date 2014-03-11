@@ -606,6 +606,8 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     $repos->{$apply_repo}{name} = $name;
 
     warn "resolved $apply_repo to $name\n";
+
+    check_apply($apply, $apply_repo);
 }
 
 if (defined($apply) and defined($apply_repo) and
