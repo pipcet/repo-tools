@@ -570,17 +570,10 @@ if ($do_new_symlinks) {
 } elsif (defined($apply_repo)) {
     # rm -rf dangling-symlink/ doesn't delete anything. Learn
     # something new every day.
+    die if $apply_repo =~ /^\/*$/;
     nsystem("rm -rf $outdir/import/" . ($apply_repo =~ s/\/$//r));
     nsystem("rm -rf $outdir/export/" . ($apply_repo =~ s/\/$//r));
 }
-
-$repos = repos(get_head(".repo/manifests/"));
-
-for my $repo (values %$repos) {
-    $repo->{name} = $repo->{manifest_name} // $repo->{name};
-}
-
-%version = %{read_versions($repos)};
 
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
