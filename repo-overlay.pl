@@ -512,6 +512,11 @@ sub check_apply {
 	}
     }
 }
+
+if (defined($apply) and defined($apply_repo)) {
+    check_apply($apply, $apply_repo);
+}
+
 chdir($pwd);
 
 unless ($do_new_symlinks) {
@@ -535,7 +540,29 @@ unless ($do_new_symlinks) {
     chdir($pwd);
 }
 
-if ($do_new_symlinks or !defined($apply_repo)) {
+$repos = repos(get_head(".repo/manifests/"));
+
+for my $repo (values %$repos) {
+    $repo->{name} = $repo->{manifest_name} // $repo->{name};
+}
+
+%version = %{read_versions($repos)};
+
+if (defined($apply_repo_name) and !defined($apply_repo)) {
+    for my $repo (keys %version) {
+	if ($repos->{$repo}{name} eq $apply_repo_name) {
+	    $apply_repo = $repo;
+	    warn "found repo to apply to: $apply_repo for $apply_repo_name";
+	    last;
+	}
+    }
+
+    die "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo_name);;
+
+    check_apply($apply, $apply_repo);
+}
+
+if ($do_new_symlinks) {
     nsystem("rm -rf $outdir/import/*");
     nsystem("rm -rf $outdir/export/*");
     nsystem("rm -rf $outdir/import/.repo");
