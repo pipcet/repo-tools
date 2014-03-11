@@ -737,14 +737,34 @@ for my $repo (@repos) {
 	next;
     }
 
-    if ($repo eq ".repo/manifests/") {
+    if ($repo eq ".repo/manifests/" and defined($apply)) {
 	$do_rebuild_tree = 1;
-	warn "rebuild tree!";
-	my $new_versions = read_versions({});
+	warn "rebuild tree! $apply_repo";
+	my $new_repos = repos($apply);
 
-	for my $key (keys %$new_versions) {
-	    if ($version{$key} ne $new_versions->{$key}) {
-		warn "tree rb: $key changed from $version{$key} to " . $new_versions->{$key};
+	for my $repo (keys %$new_repos) {
+	    if ($new_repos->{$repo}{manifest_name} ne
+		$repos->{$repo}{manifest_name}) {
+		warn "tree rb: $repo changed from " . $repos->{$repo}{manifest_name} . " to " . $new_repos->{$repo}{manifest_name};
+		my $date = `git log -1 --pretty=tformat:\%ci $apply`;
+		warn "date is $date";
+		my $diffstat =
+		    git_inter_diff($repos->{$repo}{gitpath}, $repos->{$repo}{head},
+				   $new_repos->{$repo}{gitpath}, get_head($new_repos, $repo, $date));
+
+		for my $path (keys %$diffstat) {
+		    my $stat = $diffstat->{$path};
+
+		    if ($stat eq "M") {
+			store_item({repopath=>$repo.$path, status=>" M", changed=>1});
+		    } elsif ($stat eq "A") {
+			store_item({repopath=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??", changed=>1});
+		    } elsif ($stat eq "D") {
+			store_item({repopath=>$repo.$path, status=>" D", changed=>1});
+		    } else {
+			die "$stat $path";
+		    }
+		}
 	    }
 	}
     }
