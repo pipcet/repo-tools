@@ -439,7 +439,25 @@ if ($do_print_range and defined($apply_repo)) {
     exit(0);
 }
 
-if (defined($apply) and defined($apply_repo)) {
+# find an oldest ancestor of $head that's still a descendant of $a and $b.
+sub git_find_descendant {
+    my ($head, $a, $b) = @_;
+
+    my $d;
+
+    for my $p (git_parents($head)) {
+	if (nsystem("git merge-base --is-ancestor $p $a") and
+	    nsystem("git merge-base --is-ancestor $p $b")) {
+	    return git_find_descendant($p, $a, $b);
+	}
+    }
+
+    return $head;
+}
+
+sub check_apply {
+    my ($apply, $apply_repo) = @_;
+
     die if $apply eq "";
 
     my %version = %{read_versions({})};
@@ -457,9 +475,14 @@ if (defined($apply) and defined($apply_repo)) {
 	    }
 	    if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
 		nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
-		exit(0);
+		my $d = git_find_descendant("HEAD", $apply, $version{$repo});
 		$msg .= "but all will be good in the future.\n";
+		$msg .= "merge commit:\n";
+
+		$msg .= `git log -1 $d`;
+
 		die $msg;
+		exit(0);
 	    }
 	    if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
 		$msg .= "missing link for $repo\n";
