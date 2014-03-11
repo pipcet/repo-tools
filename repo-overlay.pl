@@ -57,8 +57,10 @@ GetOptions(
     "de-emancipate!" => \$do_de_emancipate,
     ) or die;
 
-$apply_repo =~ s/\/*$/\//;
-$apply_repo =~ s/^\.\///;
+if (defined($apply_repo)) {
+    $apply_repo =~ s/\/*$/\//;
+    $apply_repo =~ s/^\.\///;
+}
 
 $outdir =~ s/\/*$//;
 $indir =~ s/\/*$//;
