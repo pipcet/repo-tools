@@ -210,12 +210,17 @@ while(1) {
 	if ($do_just_shas) {
 	    my $repo = $dates[0][2]->{repo};
 	    my $repoid = $r{$repo}->{id};
+	    my $reponame = $r{$repo}->{name};
 	    my $entry = $dates[0][2]->get;
 
 	    my @msg;
 	    push @msg, "--commit-commitdate='" . $entry->{commitdate} . "'";
 	    push @msg, "--apply=" . $entry->{sha};
-	    push @msg, "--apply-repo=" . $repoid;
+	    if (defined($reponame)) {
+		push @msg, "--apply-repo-name=" . $reponame;
+	    } else {
+		push @msg, "--apply-repo=" . $repoid;
+	    }
 	    push @msg, "--commit-message-file=$commit_msg" if defined($commit_msg);
 	    push @msg, "--commit-authordate='".$entry->{authordate}."'";
 	    push @msg, "--commit-committer='".$entry->{committer}."'";
