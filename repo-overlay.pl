@@ -564,7 +564,7 @@ unless ($do_new_symlinks) {
     chdir($pwd);
 }
 
-$repos = repos(get_head(".repo/manifests/"));
+$repos = repos(get_head($repos, ".repo/manifests/"));
 
 for my $repo (values %$repos) {
     $repo->{name} = $repo->{manifest_name} // $repo->{name};
@@ -633,7 +633,8 @@ if (defined($apply) and defined($apply_repo) and
 }
 
 sub get_head {
-    my ($repo) = @_;
+    my ($repos, $repo, $date) = @_;
+    $date //= "February 1"; # XXX
 
     return $repos->{$repo}{head} if exists($repos->{$repo}{head});
 
@@ -644,7 +645,7 @@ sub get_head {
     return undef unless defined($gitpath);
     chdir($gitpath);
 
-    my $branch = `git log -1 --reverse --pretty=oneline --until='February 1'|cut -c -40`;
+    my $branch = `git log -1 --reverse --pretty=oneline --until='$date'|cut -c -40`;
     chomp($branch);
     my $head;
     if ($do_new_versions) {
@@ -689,7 +690,7 @@ store_item({repopath=>"", changed=>1});
 store_item({repopath=>".", changed=>1});
 
 for my $repo (@repos) {
-    my $head = get_head($repo);
+    my $head = get_head($repos, $repo);
     my $oldhead = $repos->{$repo}{oldhead};
     my $newhead = $repos->{$repo}{newhead};
 
