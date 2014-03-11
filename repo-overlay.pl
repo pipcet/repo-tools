@@ -771,9 +771,13 @@ sub scan_repo {
 		}
 
 		nsystem("rm -rf $outdir/import/$repo") unless $repo =~ /^\/*$/;
+		nsystem("rm -rf $outdir/export/$repo") unless $repo =~ /^\/*$/;
+		store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
 		scan_repo($repo);
 	    }
 	}
+
+	$repos = $new_repos;
     }
 
     git_walk_tree($repo, "", $head);
