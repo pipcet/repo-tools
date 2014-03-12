@@ -909,12 +909,12 @@ nsystem("ln -s $pwd $outdir/repo-overlay") or die;
 if ($do_commit and defined($commit_message_file)) {
     chdir("$outdir/import");
     if ($do_emancipate) {
-	nsystem("git add --all; git commit -m 'emancipation commit for $apply' " .
+	nsystem("git add --all .; git commit -m 'emancipation commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : ""));
     } else {
 	nsystem("git commit --allow-empty -m 'COMMITTING REPO CHANGES'") if ($apply_repo eq ".repo/manifests/");
-	nsystem("git add --all; git commit --allow-empty -F $commit_message_file " .
+	nsystem("git add --all .; git commit --allow-empty -F $commit_message_file " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
     }
@@ -931,7 +931,7 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
     }
 
     if ($do_commit) {
-	nsystem("git add --all; git commit -m 'versioning commit for $apply' " .
+	nsystem("git add --all .; git commit -m 'versioning commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
     }
