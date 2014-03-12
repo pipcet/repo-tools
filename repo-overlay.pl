@@ -283,6 +283,7 @@ sub git_find_untracked {
     my @files = split(/\0/, `find -maxdepth 1 -print0`);
 
     for my $file (@files) {
+	next if ($dirstate->{mdata}{repos}{$file . "/"});
 	push @res, $file;
 	if (-d $file) {
 	    push @res, $dirstate->git_find_untracked($file);
