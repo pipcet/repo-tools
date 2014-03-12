@@ -668,10 +668,10 @@ if (defined($apply) and defined($apply_repo)) {
 
 chdir($pwd);
 
-my $version = get_base_version("$pwd/.repo/manifests");
-my $mdata = ManifestData->new($version);
-my $dirstate_head = new DirState($mdata);
-my $dirstate_wd = new DirState($mdata);
+my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
+my $dirstate_head = new DirState($mdata_head);
+my $mdata_wd = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
+my $dirstate_wd = new DirState($mdata_wd);
 
 unless ($do_new_symlinks) {
     chdir("$outdir/head");
@@ -694,16 +694,16 @@ unless ($do_new_symlinks) {
     chdir($pwd);
 }
 
-%version = %{$mdata->read_versions()};
+%version = %{$mdata_head->read_versions()};
 
-for my $repo ($mdata->repos) {
-    $mdata->{repos}{$repo}{name} = $mdata->{repos}{$repo}{manifest_name} //
-	$mdata->{repos}{$repo}{name};
+for my $repo ($mdata_head->repos) {
+    $mdata_head->{repos}{$repo}{name} = $mdata_head->{repos}{$repo}{manifest_name} //
+	$mdata_head->{repos}{$repo}{name};
 }
 
 if (defined($apply_repo_name) and !defined($apply_repo)) {
     for my $repo (keys %version) {
-	if ($mdata->{repos}{$repo}{name} eq $apply_repo_name) {
+	if ($mdata_head->{repos}{$repo}{name} eq $apply_repo_name) {
 	    $apply_repo = $repo;
 	    warn "found repo to apply to: $apply_repo for $apply_repo_name";
 	    last;
@@ -731,14 +731,14 @@ if ($do_new_symlinks) {
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
     #XXX
-    $mdata->{repos}{$apply_repo}{name} = $mdata->{repos}{$apply_repo}{versioned_name};
+    $mdata_head->{repos}{$apply_repo}{name} = $mdata_head->{repos}{$apply_repo}{versioned_name};
 }
 
 if ($do_new_symlinks) {
     setup_repo_links();
 }
 
-my @repos = $mdata->repos;
+my @repos = $mdata_head->repos;
 
 if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     my $manifest = $apply_last_manifest // "HEAD";
@@ -751,8 +751,8 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     }
 
     $apply_repo_name = $name;
-    $mdata->{repos}{$apply_repo} = $backrepos->{$apply_repo};
-    $mdata->{repos}{$apply_repo}{name} = $name;
+    $mdata_head->{repos}{$apply_repo} = $backrepos->{$apply_repo};
+    $mdata_head->{repos}{$apply_repo}{name} = $name;
 
     warn "resolved $apply_repo to $name\n";
 
@@ -767,7 +767,7 @@ if (defined($apply) and defined($apply_repo) and
 sub get_base_version {
     my ($dir, $date) = @_;
 
-    $date //= "March 1"; # XXX
+    $date //= ""; # XXX
 
     chdir($dir);
 
@@ -906,7 +906,7 @@ sub scan_repo {
 	    }
 	}
 
-	$mdata = $new_mdata;
+	$mdata_head = $new_mdata;
     }
 
     $dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
@@ -938,7 +938,7 @@ chdir($outdir);
 for my $item ($dirstate_head->items) {
     my $repo = $item->{repo};
     my $head;
-    $head = $mdata->get_head($repo) if ($repo ne "");
+    $head = $mdata_head->get_head($repo) if ($repo ne "");
     next unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
@@ -957,7 +957,7 @@ for my $item ($dirstate_head->items) {
 
 	if (!$dirstate_head->{items}{$dir}{changed}) {
 	    if (! (-e "head/$dir" || -l "head/$dir")) {
-		symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$gitpath", "head/$dir") or die;
+		symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$gitpath", "head/$dir") or die;
 	    }
 	} else {
 	    mkdirp("head/$dir")
@@ -966,10 +966,10 @@ for my $item ($dirstate_head->items) {
     if ($type eq "file") {
 	my $file = $gitpath;
 
-	if ($item->{changed} or $mdata->{repos}{$repo}{name} eq "") {
-	    cat_file($mdata->repo_master($mdata->{repos}{$repo}{name}, 1), $head, $file, "head/$repo$file");
+	if ($item->{changed} or $mdata_head->{repos}{$repo}{name} eq "") {
+	    cat_file($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}, 1), $head, $file, "head/$repo$file");
 	} else {
-	    symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$file", "head/$repo$file") or die;
+	    symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$file", "head/$repo$file") or die;
 	}
     }
     if ($type eq "link") {
@@ -983,7 +983,7 @@ for my $item ($dirstate_head->items) {
 for my $item ($dirstate_wd->items) {
     my $repo = $item->{repo};
     my $head;
-    $head = $mdata->get_head($repo) if ($repo ne "");
+    $head = $mdata_wd->get_head($repo) if ($repo ne "");
     next unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
@@ -1002,7 +1002,7 @@ for my $item ($dirstate_wd->items) {
 
 	if (!$dirstate_wd->{items}{$dir}{changed}) {
 	    if (! (-e "wd/$dir" || -l "wd/$dir")) {
-		symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$gitpath", "wd/$dir") or die;
+		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "wd/$dir") or die;
 	    }
 	} else {
 	    mkdirp("wd/$dir")
@@ -1011,10 +1011,10 @@ for my $item ($dirstate_wd->items) {
     if ($type eq "file") {
 	my $file = $gitpath;
 
-	if ($item->{changed} or $mdata->{repos}{$repo}{name} eq "") {
+	if ($item->{changed} or $mdata_wd->{repos}{$repo}{name} eq "") {
 	    copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
 	} else {
-	    symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$file", "wd/$repo$file") or die;
+	    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$file", "wd/$repo$file") or die;
 	}
     }
     if ($type eq "link") {
@@ -1053,7 +1053,7 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/head/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$mdata->{repos}{$repo}{head}." ".$mdata->{repos}{$repo}{name}."\n";
+	print $version_fh "$repo: ".$mdata_head->{repos}{$repo}{head}." ".$mdata_head->{repos}{$repo}{name}."\n";
 	close $version_fh;
     }
 
