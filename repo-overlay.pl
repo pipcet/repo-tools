@@ -329,7 +329,9 @@ sub scan_repo_find_changed {
 	    } elsif ($stat eq "A") {
 		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
 	    } elsif ($stat eq "D") {
-		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "T") {
+		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
 	    } else {
 		die "$stat $path";
 	    }
@@ -346,6 +348,8 @@ sub scan_repo_find_changed {
 		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
 	    } elsif ($stat eq "D") {
 		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+	    } elsif ($stat eq "T") {
+		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
 	    } else {
 		die "$stat $path";
 	    }
