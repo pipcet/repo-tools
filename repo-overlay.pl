@@ -926,7 +926,8 @@ if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
 
     if ($apply_repo eq ".repo/manifests/") {
-	update_manifest();
+	$mdata_head = update_manifest();
+	$dirstate_head = new DirState($mdata_head);
     }
 
     for my $repo ($dirstate_head->repos) {
