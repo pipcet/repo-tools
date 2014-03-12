@@ -153,7 +153,7 @@ if (!@repos) {
 	    if (begins_with($prepo, "$dir/", \$repo)) {
 		push @repos, [$prepo, $repo =~ s/\/$//r, $dir eq "." ? undef : $repo =~ s/\/$//r];
 	    } else {
-		die "mismatch: $prepo $dir"
+		die "mismatch: $prepo $dir";
 	    }
 	}
     }
@@ -180,8 +180,7 @@ sub revparse {
     my ($head) = @_;
     my $last = `git rev-parse '$head' 2>/dev/null`;
     chomp($last);
-    if ($last =~ /[^0-9a-f]/ or
-	length($last) < 10) {
+    if ($last =~ /[^0-9a-f]/ or length($last) < 10) {
 	return undef;
     } else {
 	return $last;
@@ -190,16 +189,16 @@ sub revparse {
 
 sub find_manifest_before {
     my ($version) = @_;
-    my @versions = split(/\0/, `(cd .repo/manifests; git log -pretty=tformat:'%H' -z)`);
+    my @versions = split(/\0/, `(cd .repo/manifests; git log --pretty=tformat:'%H' -z)`);
 
     return $versions[0] unless $version;
 
     for (my $i = 0; ; $i++) {
 	if (revparse("@{$i}") eq $version) {
-	    return revparse("@{".($i+1)."}");
+	    return revparse("\@{".($i+1)."}");
 	}
 
-	last unless revparse("@{$i}");
+	last unless revparse("\@{$i}");
     }
 }
 
@@ -270,7 +269,7 @@ while(1) {
 	    $cooked =~ s/^\.\.\n//msg;
 	    my $l;
 	    if (($l = length($cooked)) > 1000000) {
-		$cooked = substr($cooked, 0, 1000) . "\n" . ($l-1000) . " bytes skipped\n"
+		$cooked = substr($cooked, 0, 1000) . "\n" . ($l-1000) . " bytes skipped\n";
 	    }
 	    print $cooked;
 	}
