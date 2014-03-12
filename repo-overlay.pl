@@ -318,25 +318,24 @@ sub scan_repo_find_changed {
 	next;
     }
 
-    if ($oldhead eq $newhead) {
-	my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+    my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
 
-	for my $path (keys %diffstat) {
-	    my $stat = $diffstat{$path};
+    for my $path (keys %diffstat) {
+	my $stat = $diffstat{$path};
 
-	    if ($stat eq "M") {
-		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
-	    } elsif ($stat eq "A") {
-		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-	    } elsif ($stat eq "D") {
-		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-	    } elsif ($stat eq "T") {
-		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
-	    } else {
-		die "$stat $path";
-	    }
+	if ($stat eq "M") {
+	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	} elsif ($stat eq "A") {
+	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	} elsif ($stat eq "D") {
+	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	} elsif ($stat eq "T") {
+	    $dirstate->store_item($repo.$path, {status=>" T", changed=>1});
+	} else {
+	    die "$stat $path";
 	}
-    } else {
+    }
+    if ($oldhead ne $newhead) {
 	my %diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
 
 	for my $path (keys %diffstat) {
@@ -819,7 +818,7 @@ sub update_manifest {
 		nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
 	    }
 	    $dirstate->store_item($repo, {changed=>1});
-	    $mdata->scan_repo_find_changed($repo);
+	    $dirstate->scan_repo_find_changed($repo);
 	}
     }
 
