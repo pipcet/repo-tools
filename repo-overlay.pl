@@ -373,6 +373,67 @@ sub scan_repo {
     return $new_mdata // $mdata;
 }
 
+sub scan_repo_find_changed {
+    my ($dirstate, $repo) = @_;
+    my $mdata = $dirstate->{mdata};
+    my $head = $mdata->get_head($repo);
+    $mdata->{repos}{$repo}{head} = $head;
+    my $oldhead = $mdata->{repos}{$repo}{oldhead};
+    my $newhead = $mdata->{repos}{$repo}{newhead};
+
+    my $gitpath = $mdata->get_gitpath($repo);
+    return unless defined($gitpath);
+
+    chdir($gitpath);
+
+    $dirstate->store_item($repo, { type=>"dir" });
+    if (begins_with($mdata->repo_master($mdata->{repos}{$repo}{name}), "$pwd/")) {
+	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+    } else {
+	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+    }
+
+    if (!defined($head)) {
+	$dirstate->store_item($repo, {changed=>1});
+	$mdata->{repos}{$repo}{deleted} = 1;
+	next;
+    }
+
+    if ($oldhead eq $newhead) {
+	my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+
+	for my $path (keys %diffstat) {
+	    my $stat = $diffstat{$path};
+
+	    if ($stat eq "M") {
+		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	    } elsif ($stat eq "A") {
+		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "D") {
+		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+	    } else {
+		die "$stat $path";
+	    }
+	}
+    } else {
+	my %diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
+
+	for my $path (keys %diffstat) {
+	    my $stat = $diffstat{$path};
+
+	    if ($stat eq "M") {
+		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	    } elsif ($stat eq "A") {
+		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "D") {
+		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+	    } else {
+		die "$stat $path";
+	    }
+	}
+    }
+}
+
 sub new {
     my ($class, $mdata) = @_;
 
@@ -919,20 +980,36 @@ sub get_base_version {
     return $head;
 }
 
-for my $repo ($dirstate_head->repos) {
-    $dirstate_head->store_item($repo, {changed=>1}); # XXX for nested repositories
-}
+if (defined($apply) and defined($apply_repo) and
+    !$do_new_symlinks and !$do_new_versions) {
+} else {
+    for my $repo ($dirstate_head->repos) {
+	$dirstate_head->store_item($repo, {changed=>1}); # XXX for nested repositories
+    }
 
-for my $repo ($dirstate_head->repos) {
-    $dirstate_head->scan_repo($repo);
-}
+    for my $repo ($dirstate_head->repos) {
+	$dirstate_head->scan_repo_find_changed($repo);
+    }
 
-for my $repo ($dirstate_wd->repos) {
-    $dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
-}
+    for my $repo ($dirstate_head->repos) {
+	my $mdata = $dirstate_head->{mdata};
+	my $head = $mdata->{repos}{$repo}{head};
+	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
+    }
 
-for my $repo ($dirstate_wd->repos) {
-    $dirstate_wd->scan_repo($repo);
+    for my $repo ($dirstate_wd->repos) {
+	$dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
+    }
+
+    for my $repo ($dirstate_wd->repos) {
+	$dirstate_wd->scan_repo_find_changed($repo);
+    }
+
+    for my $repo ($dirstate_wd->repos) {
+	my $mdata = $dirstate_wd->{mdata};
+	my $head = $mdata->{repos}{$repo}{head};
+	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
+    }
 }
 
 chdir($pwd);
@@ -1066,7 +1143,7 @@ if ($do_commit and defined($commit_message_file)) {
 }
 
 if (($apply_success or $do_new_versions) and !$do_emancipate) {
-    for my $repo (@repos) {
+    for my $repo ($mdata_head->repos) {
 	my $version_fh;
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
