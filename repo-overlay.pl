@@ -518,6 +518,7 @@ sub new {
 
     my @res;
     if (defined($version)) {
+	die if $version eq "";
 	nsystem("rm -rf $outdir/manifests/$version");
 	if (! -d "$outdir/manifests/$version/manifests") {
 	    nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
@@ -1031,7 +1032,7 @@ if ($do_wd) {
 	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 
-    chdir($outdir);
+    chdir($pwd);
 
     for my $item ($dirstate_wd->items) {
 	if (-l $item->{repopath}) {
@@ -1046,6 +1047,8 @@ if ($do_wd) {
 	    die;
 	}
     }
+
+    chdir($outdir);
 
     for my $item ($dirstate_wd->items) {
 	my $repo = $item->{repo};
