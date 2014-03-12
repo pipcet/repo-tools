@@ -760,6 +760,27 @@ sub git_inter_diff {
     return \%diffstat;
 }
 
+sub get_base_version {
+    my ($dir, $date) = @_;
+
+    $date //= ""; # XXX
+
+    chdir($dir);
+
+    my $branch = `git log -1 --reverse --pretty=oneline --until='$date'|cut -c -40`;
+    chomp($branch);
+    my $head;
+    if ($do_new_versions) {
+	$head = revparse($branch) // revparse("HEAD");
+    } else {
+# XXX	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
+    }
+
+    die if $head eq "";
+
+    return $head;
+}
+
 
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
@@ -952,29 +973,21 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     check_apply($apply, $apply_repo);
 }
 
-sub get_base_version {
-    my ($dir, $date) = @_;
-
-    $date //= ""; # XXX
-
-    chdir($dir);
-
-    my $branch = `git log -1 --reverse --pretty=oneline --until='$date'|cut -c -40`;
-    chomp($branch);
-    my $head;
-    if ($do_new_versions) {
-	$head = revparse($branch) // revparse("HEAD");
-    } else {
-# XXX	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
-    }
-
-    die if $head eq "";
-
-    return $head;
-}
-
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
+    for my $repo ($dirstate_head->repos) {
+	$dirstate_head->store_item($repo, {changed=>1}); # XXX for nested repositories
+    }
+
+    for my $repo ($dirstate_head->repos) {
+	$dirstate_head->scan_repo_find_changed($repo);
+    }
+
+    for my $repo ($dirstate_head->repos) {
+	my $mdata = $dirstate_head->{mdata};
+	my $head = $mdata->{repos}{$repo}{head};
+	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
+    }
 } else {
     for my $repo ($dirstate_head->repos) {
 	$dirstate_head->store_item($repo, {changed=>1}); # XXX for nested repositories
