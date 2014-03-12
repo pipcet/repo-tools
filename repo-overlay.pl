@@ -37,6 +37,8 @@ my $commit_authordate;
 my $commit_author;
 my $arg_recurse=10;
 
+my $date;
+
 GetOptions(
     "hardlink!" => \$do_hardlink,
     "out=s" => \$outdir,
@@ -58,6 +60,7 @@ GetOptions(
     "recurse=i" => \$arg_recurse,
     "emancipate!" => \$do_emancipate,
     "de-emancipate!" => \$do_de_emancipate,
+    "date=s" => \$date,
     ) or die;
 
 if (defined($apply_repo)) {
@@ -781,7 +784,6 @@ if (defined($apply) and defined($apply_repo)) {
 
 chdir($pwd);
 
-my $date = undef;
 my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
 my $dirstate_head = new DirState($mdata_head);
 
