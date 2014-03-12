@@ -132,6 +132,26 @@ our sub prefix {
     return $ret;
 }
 
+package Repository;
+
+sub url {
+    my ($r) = @_;
+
+    return $r->{url};
+}
+
+sub path {
+    my ($r) = @_;
+
+    return $r->{path};
+}
+
+sub name {
+    my ($r) = @_;
+
+    return $r->{name};
+}
+
 package DirState;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
