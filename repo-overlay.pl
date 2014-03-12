@@ -271,6 +271,22 @@ sub git_walk_tree_head {
     }
 }
 
+sub git_find_untracked {
+    my ($dirstate, $dir) = @_;
+    my @res;
+
+    my @files = split(/\0/, `find -maxdepth 1 -print0`);
+
+    for my $file (@files) {
+	push @res, $file;
+	if (-d $file) {
+	    push @res, $dirstate->git_find_untracked($file);
+	}
+    }
+
+    return @res;
+}
+
 sub scan_repo_find_changed {
     my ($dirstate, $repo) = @_;
     my $mdata = $dirstate->{mdata};
