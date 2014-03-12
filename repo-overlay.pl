@@ -337,7 +337,7 @@ sub scan_repo {
 	warn "rebuild tree! $apply_repo";
 	my $new_mdata = ManifestData->new($apply);
 	for my $repo ($new_mdata->repos) {
-	    $repo->{name} = $repo->{manifest_name} // $repo->{name};
+	    $repo->{name} = $repo->{name};
 	}
 
 	$new_mdata->{repos}{$repo}{head} = $head;
@@ -353,9 +353,9 @@ sub scan_repo {
 	}
 
 	for my $repo (keys %rset) {
-	    if ($new_mdata->{repos}{$repo}{manifest_name} ne
-		$mdata->{repos}{$repo}{manifest_name}) {
-		warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{manifest_name} . " to " . $new_mdata->{repos}{$repo}{manifest_name};
+	    if ($new_mdata->{repos}{$repo}{name} ne
+		$mdata->{repos}{$repo}{name}) {
+		warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{name} . " to " . $new_mdata->{repos}{$repo}{name};
 		my $head = ($new_mdata->{repos}{$repo}{name} ne "") ? $new_mdata->get_head($repo, $date) : "";
 		my $diffstat =
 		    git_inter_diff($mdata->{repos}{$repo}{gitpath}, $mdata->{repos}{$repo}{head},
@@ -584,7 +584,7 @@ sub get_gitpath {
     my $gitpath = $mdata->{repos}{$repo}{gitpath};
 
     if ($gitpath eq "" or ! -e $gitpath) {
-	my $url = $mdata->{repos}{$repo}{manifest_url};
+	my $url = $mdata->{repos}{$repo}{url};
 
 	if (!($url=~/\/\//)) {
 	    # XXX why is this strange fix needed?
@@ -626,13 +626,13 @@ sub new {
     map { $_->[0] =~ s/\/*$/\//; } @res;
 
     for my $r (@res) {
-	my ($repopath, $manifest_name, $manifest_url, $manifest_revision) = @$r;
+	my ($repopath, $name, $url, $revision) = @$r;
 	$repos->{$repopath}{relpath} = $repopath;
-	$repos->{$repopath}{manifest_name} = $manifest_name;
-	$repos->{$repopath}{manifest_url} = $manifest_url;
-	$repos->{$repopath}{manifest_revision} = $manifest_revision;
+	$repos->{$repopath}{name} = $name;
+	$repos->{$repopath}{url} = $url;
+	$repos->{$repopath}{revision} = $revision;
 	$repos->{$repopath}{path} = "$outdir/head/$repopath";
-	$repos->{$repopath}{gitpath} = "$repos_by_name_dir/$manifest_name/repo";
+	$repos->{$repopath}{gitpath} = "$repos_by_name_dir/$name/repo";
     }
 
     $repos->{".repo/repo/"} = {
@@ -640,7 +640,6 @@ sub new {
 	gitpath => "$repos_by_name_dir/.repo/repo/repo",
 	name => ".repo/repo",
 	relpath => ".repo/repo/",
-	manifest_name => ".repo/repo",
     };
 
     $repos->{".repo/manifests/"} = {
@@ -648,7 +647,6 @@ sub new {
 	gitpath => "$repos_by_name_dir/.repo/manifests/repo",
 	name => ".repo/manifests",
 	relpath => ".repo/manifests/",
-	manifest_name => ".repo/manifests",
     };
 
     $md->{repos} = $repos;
@@ -666,7 +664,7 @@ sub setup_repo_links {
 
     system("rm -rf $outdir/repos-by-name");
     for my $repo (values %{$head_mdata->{repos}}) {
-	my $name = $repo->{manifest_name} // $repo->{name};
+	my $name = $repo->{name};
 	my $linkdir = "$outdir/repos-by-name/" . $name . "/";
 
 	mkdirp($linkdir);
@@ -928,13 +926,11 @@ unless ($do_new_symlinks) {
 %version = %{$mdata_head->read_versions()};
 
 for my $repo ($mdata_head->repos) {
-    $mdata_head->{repos}{$repo}{name} = $mdata_head->{repos}{$repo}{manifest_name} //
-	$mdata_head->{repos}{$repo}{name};
+    $mdata_head->{repos}{$repo}{name} = $mdata_head->{repos}{$repo}{name};
 }
 
 for my $repo ($mdata_wd->repos) {
-    $mdata_wd->{repos}{$repo}{name} = $mdata_wd->{repos}{$repo}{manifest_name} //
-	$mdata_wd->{repos}{$repo}{name};
+    $mdata_wd->{repos}{$repo}{name} = $mdata_wd->{repos}{$repo}{name};
 }
 
 if (defined($apply_repo_name) and !defined($apply_repo)) {
@@ -977,7 +973,7 @@ if ($do_new_symlinks) {
 if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     my $manifest = $apply_last_manifest // "HEAD";
     my $backrepos = repos($manifest);
-    my $name = $backrepos->{$apply_repo}{manifest_name};
+    my $name = $backrepos->{$apply_repo}{name};
 
     unless (defined($name)) {
 	warn "cannot resolve repo $apply_repo (manifest $manifest)";
