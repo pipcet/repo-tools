@@ -275,11 +275,10 @@ sub scan_repo {
     my ($dirstate, $repo) = @_;
     my $mdata = $dirstate->{mdata};
     my $head = $mdata->get_head($repo);
-    $mdata->{repos}{$repo}{head} = $head;
     my $oldhead = $mdata->{repos}{$repo}{oldhead};
     my $newhead = $mdata->{repos}{$repo}{newhead};
-
     my $gitpath = $mdata->get_gitpath($repo);
+
     return unless defined($gitpath);
 
     chdir($gitpath);
@@ -336,9 +335,6 @@ sub scan_repo {
 	$do_rebuild_tree = 1;
 	warn "rebuild tree! $apply_repo";
 	my $new_mdata = ManifestData->new($apply);
-	for my $repo ($new_mdata->repos) {
-	    $repo->{name} = $repo->{name};
-	}
 
 	$new_mdata->{repos}{$repo}{head} = $head;
 
@@ -397,7 +393,6 @@ sub scan_repo_find_changed {
     my ($dirstate, $repo) = @_;
     my $mdata = $dirstate->{mdata};
     my $head = $mdata->get_head($repo);
-    $mdata->{repos}{$repo}{head} = $head;
     my $oldhead = $mdata->{repos}{$repo}{oldhead};
     my $newhead = $mdata->{repos}{$repo}{newhead};
 
@@ -550,6 +545,8 @@ sub get_head {
     $mdata->{repos}{$repo}{newhead} = $newhead;
 
     chdir($pwd);
+
+    $mdata->{repos}{$repo}{head} = $head;
 
     return $head;
 }
