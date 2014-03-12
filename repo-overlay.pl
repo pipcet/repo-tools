@@ -688,18 +688,6 @@ sub get_base_version {
     return $head;
 }
 
-
-# see comment at end of file
-nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
-
-nsystem("mkdir -p $outdir/head $outdir/wd") or die;
--d "$outdir/head/.git" or die;
-
-if ($do_new_versions) {
-    nsystem("rm -rf $outdir/versions/*");
-    nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
-}
-
 # find an oldest ancestor of $head that's still a descendant of $a and $b.
 sub git_find_descendant {
     my ($head, $a, $b) = @_;
@@ -776,6 +764,75 @@ sub check_apply {
 	    die($msg);
 	}
     }
+}
+
+sub update_manifest {
+    my $new_mdata;
+    my $repo = $apply_repo;
+    my $mdata = $mdata_head;
+    my $dirstate = $dirstate_head;
+
+    $do_rebuild_tree = 1;
+    warn "rebuild tree! $apply_repo";
+    my $date = `git log -1 --pretty=tformat:\%ci $apply`;
+    warn "date is $date";
+    my $new_mdata = ManifestData->new($apply, $date);
+
+    # XXX $new_mdata->{repos}{$repo}{head} = $head;
+
+    chdir($pwd);
+    chdir($repo);
+
+    my %rset;
+    for my $repo ($new_mdata->repos, $mdata->repos) {
+	$rset{$repo} = 1;
+    }
+
+    for my $repo (keys %rset) {
+	if ($new_mdata->{repos}{$repo}{name} ne
+	    $mdata->{repos}{$repo}{name}) {
+	    warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{name} . " to " . $new_mdata->{repos}{$repo}{name};
+	    my $head = ($new_mdata->{repos}{$repo}{name} ne "") ? $new_mdata->get_head($repo) : "";
+	    my $diffstat =
+		git_inter_diff($mdata->{repos}{$repo}{gitpath}, $mdata->{repos}{$repo}{head},
+			       $new_mdata->{repos}{$repo}{gitpath}, $head);
+
+	    for my $path (keys %$diffstat) {
+		my $stat = $diffstat->{$path};
+
+		if ($stat eq "M") {
+		    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+		} elsif ($stat eq "A") {
+		    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+		} elsif ($stat eq "D") {
+		    $dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+		} else {
+		    die "$stat $path";
+		}
+	    }
+
+	    if (!$do_emancipate) {
+		nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+		nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+	    }
+	    $dirstate->store_item($repo, {changed=>1});
+	    scan_repo($repo);
+	}
+    }
+
+    return $new_mdata;
+}
+
+
+# see comment at end of file
+nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
+
+nsystem("mkdir -p $outdir/head $outdir/wd") or die;
+-d "$outdir/head/.git" or die;
+
+if ($do_new_versions) {
+    nsystem("rm -rf $outdir/versions/*");
+    nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
 }
 
 if (defined($apply) and defined($apply_repo)) {
@@ -867,63 +924,6 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     check_apply($apply, $apply_repo);
 }
 
-sub update_manifest {
-    my $new_mdata;
-    my $repo = $apply_repo;
-    my $mdata = $mdata_head;
-    my $dirstate = $dirstate_head;
-
-    $do_rebuild_tree = 1;
-    warn "rebuild tree! $apply_repo";
-    my $date = `git log -1 --pretty=tformat:\%ci $apply`;
-    warn "date is $date";
-    my $new_mdata = ManifestData->new($apply, $date);
-
-    # XXX $new_mdata->{repos}{$repo}{head} = $head;
-
-    chdir($pwd);
-    chdir($repo);
-
-    my %rset;
-    for my $repo ($new_mdata->repos, $mdata->repos) {
-	$rset{$repo} = 1;
-    }
-
-    for my $repo (keys %rset) {
-	if ($new_mdata->{repos}{$repo}{name} ne
-	    $mdata->{repos}{$repo}{name}) {
-	    warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{name} . " to " . $new_mdata->{repos}{$repo}{name};
-	    my $head = ($new_mdata->{repos}{$repo}{name} ne "") ? $new_mdata->get_head($repo) : "";
-	    my $diffstat =
-		git_inter_diff($mdata->{repos}{$repo}{gitpath}, $mdata->{repos}{$repo}{head},
-			       $new_mdata->{repos}{$repo}{gitpath}, $head);
-
-	    for my $path (keys %$diffstat) {
-		my $stat = $diffstat->{$path};
-
-		if ($stat eq "M") {
-		    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
-		} elsif ($stat eq "A") {
-		    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-		} elsif ($stat eq "D") {
-		    $dirstate->store_item($repo.$path, {status=>" D", changed=>1});
-		} else {
-		    die "$stat $path";
-		}
-	    }
-
-	    if (!$do_emancipate) {
-		nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-		nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-	    }
-	    $dirstate->store_item($repo, {changed=>1});
-	    scan_repo($repo);
-	}
-    }
-
-    return $new_mdata;
-}
-
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
 
@@ -964,22 +964,6 @@ if (defined($apply) and defined($apply_repo) and
 	my $mdata = $dirstate_wd->{mdata};
 	my $head = $mdata->{repos}{$repo}{head};
 	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
-    }
-}
-
-chdir($pwd);
-
-for my $item ($dirstate_wd->items) {
-    if (-l $item->{repopath}) {
-	$item->{type} = "link";
-    } elsif (!-e $item->{repopath}) {
-	$item->{type} = "none";
-    } elsif (-d $item->{repopath}) {
-	$item->{type} = "dir";
-    } elsif (-f $item->{repopath}) {
-	$item->{type} = "file";
-    } else {
-	die;
     }
 }
 
@@ -1030,6 +1014,27 @@ for my $item ($dirstate_head->items) {
     }
 }
 
+chdir($pwd);
+
+for my $item ($dirstate_wd->items) {
+    if (-l $item->{repopath}) {
+	$item->{type} = "link";
+    } elsif (!-e $item->{repopath}) {
+	$item->{type} = "none";
+    } elsif (-d $item->{repopath}) {
+	$item->{type} = "dir";
+    } elsif (-f $item->{repopath}) {
+	$item->{type} = "file";
+    } else {
+	die;
+    }
+}
+
+chdir($outdir);
+
+copy_or_hardlink("$pwd/README.md", "$outdir/head/") or die;
+copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
+
 for my $item ($dirstate_wd->items) {
     my $repo = $item->{repo};
     my $head;
@@ -1074,9 +1079,7 @@ for my $item ($dirstate_wd->items) {
     }
 }
 
-copy_or_hardlink("$pwd/README.md", "$outdir/head/") or die;
 copy_or_hardlink("$pwd/README.md", "$outdir/wd/") or die;
-copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
 copy_or_hardlink("$pwd/Makefile", "$outdir/wd/") or die;
 
 # this must come after all symbolic links have been created, so ln
