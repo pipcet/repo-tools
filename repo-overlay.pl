@@ -140,6 +140,12 @@ use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
 
+sub items {
+    my ($dirstate) = @_;
+
+    return map { $dirstate->{items}{$_}} sort keys %{$dirstate->{items}};
+}
+
 sub store_item {
     my ($dirstate, $item) = @_;
     my $mdata = $dirstate->{mdata};
@@ -915,7 +921,7 @@ for my $item (values %{$dirstate_wd->{items}}) {
 
 chdir($outdir);
 
-for my $item (values %{$dirstate_head->{items}}) {
+for my $item ($dirstate_head->items) {
     my $repo = $item->{repo};
     my $head;
     $head = $mdata->get_head($repo) if ($repo ne "");
@@ -960,7 +966,7 @@ for my $item (values %{$dirstate_head->{items}}) {
     }
 }
 
-for my $item (values %{$dirstate_wd->{items}}) {
+for my $item ($dirstate_wd->items) {
     my $repo = $item->{repo};
     my $head;
     $head = $mdata->get_head($repo) if ($repo ne "");
