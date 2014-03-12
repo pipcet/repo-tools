@@ -772,20 +772,13 @@ sub git_inter_diff {
 }
 
 sub get_base_version {
-    my ($dir, $date) = @_;
+    my ($dir, $version) = @_;
 
     $date //= ""; # XXX
 
     chdir($dir);
 
-    my $branch = `git log -1 --reverse --pretty=oneline --until='$date'|cut -c -40`;
-    chomp($branch);
-    my $head;
-    if ($do_new_versions) {
-	$head = revparse($branch) // revparse("HEAD");
-    } else {
-# XXX	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
-    }
+    my $head = $version // revparse("HEAD");
 
     die if $head eq "";
 
@@ -803,8 +796,6 @@ if ($do_new_versions) {
     nsystem("rm -rf $outdir/versions/*");
     nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
 }
-
-my %version;
 
 # find an oldest ancestor of $head that's still a descendant of $a and $b.
 sub git_find_descendant {
@@ -890,8 +881,13 @@ if (defined($apply) and defined($apply_repo)) {
 
 chdir($pwd);
 
-my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
+my $date = undef;
+
+my $mdata_head = ManifestData->new(
+    get_base_version("$pwd/.repo/manifests", $apply_last_manifest),
+    $date);
 my $dirstate_head = new DirState($mdata_head);
+
 my $mdata_wd = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
 my $dirstate_wd = new DirState($mdata_wd);
 
@@ -916,18 +912,8 @@ unless ($do_new_symlinks) {
     chdir($pwd);
 }
 
-%version = %{$mdata_head->read_versions()};
-
-for my $repo ($mdata_head->repos) {
-    $mdata_head->{repos}{$repo}{name} = $mdata_head->{repos}{$repo}{name};
-}
-
-for my $repo ($mdata_wd->repos) {
-    $mdata_wd->{repos}{$repo}{name} = $mdata_wd->{repos}{$repo}{name};
-}
-
 if (defined($apply_repo_name) and !defined($apply_repo)) {
-    for my $repo (keys %version) {
+    for my $repo ($mdata_head->repos) {
 	if ($mdata_head->{repos}{$repo}{name} eq $apply_repo_name) {
 	    $apply_repo = $repo;
 	    warn "found repo to apply to: $apply_repo for $apply_repo_name";
