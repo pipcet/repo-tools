@@ -293,6 +293,8 @@ sub cat_file {
     } else {
 	nsystem("cat $master/$file > $dst") or die;
     }
+
+    return 1;
 }
 
 my %items;
