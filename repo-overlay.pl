@@ -335,6 +335,7 @@ sub scan_repo_find_changed {
 	    die "$stat $path";
 	}
     }
+
     if ($oldhead ne $newhead) {
 	my %diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
 
@@ -515,15 +516,22 @@ sub new {
 
     $md->{date} = $date;
 
-    if (! -d "$outdir/manifests/$version/manifests") {
-	nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
-	nsystem("cp -a $pwd/.repo/local_manifests $outdir/manifests/$version/") or die;
-	nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests") or die;
-	nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
+    my @res;
+    if (defined($version)) {
+	nsystem("rm -rf $outdir/manifests/$version");
+	if (! -d "$outdir/manifests/$version/manifests") {
+	    nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
+	    nsystem("cp -a $pwd/.repo/local_manifests $outdir/manifests/$version/") or die;
+	    nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests") or die;
+	    nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
+	}
+
+	chdir($pwd);
+	@res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
+    } else {
+	@res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url`;
     }
 
-    chdir($pwd);
-    my @res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
     map { $_ = [split(/ : /)] } @res;
 
     map { $_->[0] =~ s/\/*$/\//; } @res;
@@ -562,8 +570,7 @@ sub new {
 package main;
 
 sub setup_repo_links {
-    system("rm -rf $outdir/manifests/HEAD");
-    my $head_mdata = ManifestData->new("HEAD");
+    my $head_mdata = ManifestData->new();
 
     system("rm -rf $outdir/repos-by-name");
     for my $repo (values %{$head_mdata->{repos}}) {
@@ -827,7 +834,7 @@ sub update_manifest {
 
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
-
+nsystem("mkdir -p $outdir/head $outdir/wd") or die;
 -d "$outdir/head/.git" or die;
 
 if ($do_new_versions) {
@@ -1005,9 +1012,9 @@ $do_wd = !(defined($apply) and defined($apply_repo) and
 	  !$do_new_symlinks and !$do_new_versions);
 
 if ($do_wd) {
-    nsystem("mkdir -p $outdir/head $outdir/wd") or die;
+    nsystem("mkdir -p $outdir/wd") or die;
 
-    my $mdata_wd = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
+    my $mdata_wd = ManifestData->new();
     my $dirstate_wd = new DirState($mdata_wd);
 
     for my $repo ($dirstate_wd->repos) {
