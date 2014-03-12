@@ -506,7 +506,7 @@ sub read_versions {
 
 sub get_head {
     my ($mdata, $repo, $date, $noupdate) = @_;
-    $date //= "March 1"; # XXX
+    $date //= "";
 
     return $mdata->{repos}{$repo}{head} if exists($mdata->{repos}{$repo}{head});
 
