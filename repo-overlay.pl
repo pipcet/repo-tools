@@ -159,6 +159,17 @@ sub store_item {
     $item->{repopath} = $path;
 
     $item->{repopath} =~ s/\/*$//;
+
+    my $repo = $item->{repopath};
+    $repo =~ s/\/*$/\//;
+    while ($repo ne "./") {
+	if ($mdata->{repos}{$repo}) {
+	    $item->{repo} = $repo;
+	    last;
+	}
+	$repo = dirname($repo) . "/";
+    }
+
     die if $item->{repopath} =~ /\/\//;
     my $repopath = $item->{repopath};
 
@@ -227,11 +238,11 @@ sub git_walk_tree_head {
 	next unless $dirstate->{items}{dirname($repo.$path)}{changed};
 
 	if ($m->{extmode} eq "120") {
-	    $dirstate->store_item($repo.$path, {type=>"link", repo=>$repo});
+	    $dirstate->store_item($repo.$path, {type=>"link"});
 	} elsif ($m->{extmode} eq "100") {
-	    $dirstate->store_item($repo.$path, {type=>"file", repo=>$repo});
+	    $dirstate->store_item($repo.$path, {type=>"file"});
 	} elsif ($m->{extmode} eq "040") {
-	    $dirstate->store_item($repo.$path, {type=>"dir", repo=>$repo});
+	    $dirstate->store_item($repo.$path, {type=>"dir"});
 	    $dirstate->git_walk_tree_head($repo, $path, $head)
 		if $dirstate->{items}{$repo.$path}{changed};
 	} else {
@@ -253,7 +264,7 @@ sub scan_repo {
 
     chdir($gitpath);
 
-    $dirstate->store_item($repo, { type=>"dir", repo=>$repo});
+    $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($mdata->repo_master($mdata->{repos}{$repo}{name}), "$pwd/")) {
 	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
     } else {
@@ -909,7 +920,15 @@ sub get_base_version {
 }
 
 for my $repo ($dirstate_head->repos) {
+    $dirstate_head->store_item($repo, {changed=>1}); # XXX for nested repositories
+}
+
+for my $repo ($dirstate_head->repos) {
     $dirstate_head->scan_repo($repo);
+}
+
+for my $repo ($dirstate_wd->repos) {
+    $dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
 }
 
 for my $repo ($dirstate_wd->repos) {
