@@ -146,6 +146,13 @@ sub items {
     return map { $dirstate->{items}{$_}} sort keys %{$dirstate->{items}};
 }
 
+sub repos {
+    my ($dirstate) = @_;
+    my $mdata = $dirstate->{mdata};
+
+    return $mdata->repos;
+}
+
 sub store_item {
     my ($dirstate, $path, $item) = @_;
     my $mdata = $dirstate->{mdata};
