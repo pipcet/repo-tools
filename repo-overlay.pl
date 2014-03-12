@@ -334,14 +334,14 @@ sub scan_repo {
     if ($repo eq ".repo/manifests/" and defined($apply)) {
 	$do_rebuild_tree = 1;
 	warn "rebuild tree! $apply_repo";
-	my $new_mdata = ManifestData->new($apply);
+	my $date = `git log -1 --pretty=tformat:\%ci $apply`;
+	warn "date is $date";
+	my $new_mdata = ManifestData->new($apply, $date);
 
 	$new_mdata->{repos}{$repo}{head} = $head;
 
 	chdir($pwd);
 	chdir($repo);
-	my $date = `git log -1 --pretty=tformat:\%ci $apply`;
-	warn "date is $date";
 
 	my %rset;
 	for my $repo ($new_mdata->repos, $mdata->repos) {
@@ -352,13 +352,10 @@ sub scan_repo {
 	    if ($new_mdata->{repos}{$repo}{name} ne
 		$mdata->{repos}{$repo}{name}) {
 		warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{name} . " to " . $new_mdata->{repos}{$repo}{name};
-		my $head = ($new_mdata->{repos}{$repo}{name} ne "") ? $new_mdata->get_head($repo, $date) : "";
+		my $head = ($new_mdata->{repos}{$repo}{name} ne "") ? $new_mdata->get_head($repo) : "";
 		my $diffstat =
 		    git_inter_diff($mdata->{repos}{$repo}{gitpath}, $mdata->{repos}{$repo}{head},
 				   $new_mdata->{repos}{$repo}{gitpath}, $head);
-		if ($head ne "") {
-		    $new_mdata->{repos}{$repo}{head} = $head;
-		}
 
 		for my $path (keys %$diffstat) {
 		    my $stat = $diffstat->{$path};
@@ -500,8 +497,8 @@ sub read_versions {
 }
 
 sub get_head {
-    my ($mdata, $repo, $date, $noupdate) = @_;
-    $date //= "";
+    my ($mdata, $repo) = @_;
+    my $data = $mdata->{date} // "";
 
     return $mdata->{repos}{$repo}{head} if exists($mdata->{repos}{$repo}{head});
 
@@ -535,18 +532,15 @@ sub get_head {
 	    warn "head $head didn't match any of " . join(", ", git_parents($apply)) . " to be replaced by $apply";
 	}
     }
-    unless ($noupdate) {
-	if (!$do_emancipate) {
-	    $head = $newhead;
-	}
+    if (!$do_emancipate) {
+	$head = $newhead;
     }
 
     $mdata->{repos}{$repo}{oldhead} = $oldhead;
     $mdata->{repos}{$repo}{newhead} = $newhead;
+    $mdata->{repos}{$repo}{head} = $head;
 
     chdir($pwd);
-
-    $mdata->{repos}{$repo}{head} = $head;
 
     return $head;
 }
@@ -604,10 +598,12 @@ sub repos {
 }
 
 sub new {
-    my ($class, $version, $repos_by_name_dir) = @_;
+    my ($class, $version, $date, $repos_by_name_dir) = @_;
     $repos_by_name_dir //= "$outdir/repos-by-name";
     my $md = {};
     my $repos = {};
+
+    $md->{date} = $date;
 
     if (! -d "$outdir/manifests/$version/manifests") {
 	nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
