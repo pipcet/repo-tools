@@ -799,10 +799,13 @@ sub scan_repo {
     chdir($gitpath);
 
     $dirstate_head->store_item($repo, { type=>"dir", repo=>$repo});
+    $dirstate_wd->store_item($repo, { type=>"dir", repo=>$repo});
     if (begins_with($mdata->repo_master($mdata->{repos}{$repo}{name}), "$pwd/")) {
 	$dirstate_head->store_item(dirname($repo), {type=>"dir", changed=>1});
+	$dirstate_wd->store_item(dirname($repo), {type=>"dir", changed=>1});
     } else {
 	$dirstate_head->store_item(dirname($repo), {type=>"dir", changed=>1});
+	$dirstate_wd->store_item(dirname($repo), {type=>"dir", changed=>1});
     }
 
     if (!defined($head)) {
@@ -843,10 +846,6 @@ sub scan_repo {
 		die "$stat $path";
 	    }
 	}
-    }
-
-    if (!$dirstate_head->{items}{$repo =~ s/\/$//r}{changed}) {
-	next;
     }
 
     if ($repo eq ".repo/manifests/" and defined($apply)) {
@@ -911,6 +910,7 @@ sub scan_repo {
     }
 
     $dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
+    $dirstate_wd->git_walk_tree_head($repo, "", "HEAD");
 }
 
 for my $repo (@repos) {
@@ -921,13 +921,13 @@ chdir($pwd);
 
 for my $item (values %{$dirstate_wd->{items}}) {
     if (-l $item->{repopath}) {
-	$item->{type} //= "link";
+	$item->{type} = "link";
     } elsif (!-e $item->{repopath}) {
-	$item->{type} //= "none";
+	$item->{type} = "none";
     } elsif (-d $item->{repopath}) {
-	$item->{type} //= "dir";
+	$item->{type} = "dir";
     } elsif (-f $item->{repopath}) {
-	$item->{type} //= "file";
+	$item->{type} = "file";
     } else {
 	die;
     }
