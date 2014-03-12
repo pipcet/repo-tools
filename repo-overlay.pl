@@ -1002,7 +1002,7 @@ copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
 
 chdir($pwd);
 
-$do_wd = (defined($apply) and defined($apply_repo) and
+$do_wd = !(defined($apply) and defined($apply_repo) and
 	  !$do_new_symlinks and !$do_new_versions);
 
 if ($do_wd) {
