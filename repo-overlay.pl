@@ -18,6 +18,8 @@ my $do_commit;
 my $do_rebuild_tree;
 my $do_emancipate;
 my $do_de_emancipate;
+my $do_wd;
+my $do_head;
 
 my $apply;
 my $apply_repo;
@@ -822,7 +824,6 @@ sub update_manifest {
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 
-nsystem("mkdir -p $outdir/head $outdir/wd") or die;
 -d "$outdir/head/.git" or die;
 
 if ($do_new_versions) {
@@ -915,9 +916,6 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     check_apply($apply, $apply_repo);
 }
 
-my $mdata_wd = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
-my $dirstate_wd = new DirState($mdata_wd);
-
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
 
@@ -999,8 +997,15 @@ copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
 
 chdir($pwd);
 
-unless (defined($apply) and defined($apply_repo) and
-	!$do_new_symlinks and !$do_new_versions) {
+$do_wd = (defined($apply) and defined($apply_repo) and
+	  !$do_new_symlinks and !$do_new_versions);
+
+if ($do_wd) {
+    nsystem("mkdir -p $outdir/head $outdir/wd") or die;
+
+    my $mdata_wd = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
+    my $dirstate_wd = new DirState($mdata_wd);
+
     for my $repo ($dirstate_wd->repos) {
 	$dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
     }
