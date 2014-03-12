@@ -681,14 +681,16 @@ sub get_head {
 	    $newhead = $apply;
 	    warn "successfully applied $apply to $repo";
 	    $apply_success = 1;
+	} else {
+	    warn "head $head didn't match any of " . join(", ", git_parents($apply)) . " to be replaced by $apply";
 	}
     }
-    if (!$do_emancipate) {
-	$head = $newhead;
+    unless ($noupdate) {
+	if (!$do_emancipate) {
+	    $head = $newhead;
+	}
     }
 
-    $version{$repo} = $head;
-    $repos->{$repo}{head} = $head;
     $repos->{$repo}{oldhead} = $oldhead;
     $repos->{$repo}{newhead} = $newhead;
 
