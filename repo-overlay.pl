@@ -149,13 +149,13 @@ sub store_item {
     my $repopath = $item->{repopath};
 
     if (defined($item->{repo}) and !defined($item->{masterpath})) {
-	my $master = $mdata->repo_master($item->{repo});
+	my $master = $mdata->repo_master($mdata->{repos}{$item->{repo}}{name});
 	my $masterpath = $master . prefix($repopath, $item->{repo} =~ s/\/$//r);
 
 	$item->{masterpath} = $masterpath;
 	$item->{master} = $master;
 
-	warn "using default masterpath $masterpath ($master) for $repopath";
+	#warn "using default masterpath $masterpath ($master) for $repopath";
     }
 
     $item->{masterpath} =~ s/\/*$//;
@@ -339,6 +339,8 @@ sub repo_master {
     }
 
     my $master = readlink("$outdir/repos-by-name/$name/repo");
+
+    $master =~ s/\/$//;
 
     die "no master for $name" unless(defined($master));
 
