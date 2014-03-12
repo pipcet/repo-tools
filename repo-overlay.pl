@@ -358,7 +358,6 @@ sub new {
     my $dirstate = {
 	items => {
 	    "" => { changed => 1 },
-	    "." => { changed => 1}, #XXX
 	},
 	mdata => $mdata, };
 
@@ -397,7 +396,7 @@ sub read_versions {
     }
     close $version_fh;
 
-    return $version;
+    return $mdata->{version} = $version;
 }
 
 sub get_head {
@@ -767,10 +766,9 @@ sub check_apply {
 }
 
 sub update_manifest {
+    my ($mdata, $dirstate) = @_;
     my $new_mdata;
     my $repo = $apply_repo;
-    my $mdata = $mdata_head;
-    my $dirstate = $dirstate_head;
 
     $do_rebuild_tree = 1;
     warn "rebuild tree! $apply_repo";
@@ -814,7 +812,7 @@ sub update_manifest {
 		nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
 	    }
 	    $dirstate->store_item($repo, {changed=>1});
-	    scan_repo($repo);
+	    $mdata->scan_repo_find_changed($repo);
 	}
     }
 
@@ -891,7 +889,6 @@ if ($do_new_symlinks) {
 
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
-    #XXX
     die unless $mdata_head->{repos}{$apply_repo}{name} eq $mdata_head->{repos}{$apply_repo}{versioned_name};
 }
 
@@ -925,11 +922,11 @@ if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
 
     if ($apply_repo eq ".repo/manifests/") {
-	$mdata_head = update_manifest();
+	$mdata_head = update_manifest($mdata_head, $dirstate_head);
 	$dirstate_head = new DirState($mdata_head);
     }
 
-    for my $repo ($dirstate_head->repos) {
+    for my $repo ($apply_repo) {
 	my $mdata = $dirstate_head->{mdata};
 	my $head = $mdata->{repos}{$repo}{head};
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
@@ -947,20 +944,6 @@ if (defined($apply) and defined($apply_repo) and
 	my $mdata = $dirstate_head->{mdata};
 	my $head = $mdata->{repos}{$repo}{head};
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
-    }
-
-    for my $repo ($dirstate_wd->repos) {
-	$dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
-    }
-
-    for my $repo ($dirstate_wd->repos) {
-	$dirstate_wd->scan_repo_find_changed($repo);
-    }
-
-    for my $repo ($dirstate_wd->repos) {
-	my $mdata = $dirstate_wd->{mdata};
-	my $head = $mdata->{repos}{$repo}{head};
-	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 }
 
@@ -1012,6 +995,23 @@ for my $item ($dirstate_head->items) {
 }
 
 chdir($pwd);
+
+unless (defined($apply) and defined($apply_repo) and
+    !$do_new_symlinks and !$do_new_versions) {
+    for my $repo ($dirstate_wd->repos) {
+	$dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
+    }
+
+    for my $repo ($dirstate_wd->repos) {
+	$dirstate_wd->scan_repo_find_changed($repo);
+    }
+
+    for my $repo ($dirstate_wd->repos) {
+	my $mdata = $dirstate_wd->{mdata};
+	my $head = $mdata->{repos}{$repo}{head};
+	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
+    }
+}
 
 for my $item ($dirstate_wd->items) {
     if (-l $item->{repopath}) {
