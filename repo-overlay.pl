@@ -994,10 +994,13 @@ for my $item ($dirstate_head->items) {
     }
 }
 
+copy_or_hardlink("$pwd/README.md", "$outdir/head/") or die;
+copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
+
 chdir($pwd);
 
 unless (defined($apply) and defined($apply_repo) and
-    !$do_new_symlinks and !$do_new_versions) {
+	!$do_new_symlinks and !$do_new_versions) {
     for my $repo ($dirstate_wd->repos) {
 	$dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
     }
@@ -1011,73 +1014,70 @@ unless (defined($apply) and defined($apply_repo) and
 	my $head = $mdata->{repos}{$repo}{head};
 	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
-}
 
-for my $item ($dirstate_wd->items) {
-    if (-l $item->{repopath}) {
-	$item->{type} = "link";
-    } elsif (!-e $item->{repopath}) {
-	$item->{type} = "none";
-    } elsif (-d $item->{repopath}) {
-	$item->{type} = "dir";
-    } elsif (-f $item->{repopath}) {
-	$item->{type} = "file";
-    } else {
-	die;
-    }
-}
+    chdir($outdir);
 
-chdir($outdir);
-
-copy_or_hardlink("$pwd/README.md", "$outdir/head/") or die;
-copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
-
-for my $item ($dirstate_wd->items) {
-    my $repo = $item->{repo};
-    my $head;
-    $head = $mdata_wd->get_head($repo) if ($repo ne "");
-    next unless defined($head) or $do_new_symlinks;
-    my $repopath = $item->{repopath};
-    next if $repopath eq "" or $repopath eq ".";
-    next unless $dirstate_wd->{items}{dirname($repopath)}{changed};
-    my $gitpath = $item->{gitpath};
-    my $type = $item->{type};
-
-    if ($type eq "dir") {
-	my $dir = $repopath;
-
-	die if $dir eq ".";
-	my $dirname = $dir;
-	while(!$dirstate_wd->{items}{$dirname}{changed}) {
-	    ($dir, $dirname) = ($dirname, dirname($dirname));
+    for my $item ($dirstate_wd->items) {
+	if (-l $item->{repopath}) {
+	    $item->{type} = "link";
+	} elsif (!-e $item->{repopath}) {
+	    $item->{type} = "none";
+	} elsif (-d $item->{repopath}) {
+	    $item->{type} = "dir";
+	} elsif (-f $item->{repopath}) {
+	    $item->{type} = "file";
+	} else {
+	    die;
 	}
+    }
 
-	if (!$dirstate_wd->{items}{$dir}{changed}) {
-	    if (! (-e "wd/$dir" || -l "wd/$dir")) {
-		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "wd/$dir") or die;
+    for my $item ($dirstate_wd->items) {
+	my $repo = $item->{repo};
+	my $head;
+	$head = $mdata_wd->get_head($repo) if ($repo ne "");
+	next unless defined($head) or $do_new_symlinks;
+	my $repopath = $item->{repopath};
+	next if $repopath eq "" or $repopath eq ".";
+	next unless $dirstate_wd->{items}{dirname($repopath)}{changed};
+	my $gitpath = $item->{gitpath};
+	my $type = $item->{type};
+
+	if ($type eq "dir") {
+	    my $dir = $repopath;
+
+	    die if $dir eq ".";
+	    my $dirname = $dir;
+	    while(!$dirstate_wd->{items}{$dirname}{changed}) {
+		($dir, $dirname) = ($dirname, dirname($dirname));
 	    }
-	} else {
-	    mkdirp("wd/$dir")
-	}
-    }
-    if ($type eq "file") {
-	my $file = $gitpath;
 
-	if ($item->{changed} or $mdata_wd->{repos}{$repo}{name} eq "") {
+	    if (!$dirstate_wd->{items}{$dir}{changed}) {
+		if (! (-e "wd/$dir" || -l "wd/$dir")) {
+		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "wd/$dir") or die;
+		}
+	    } else {
+		mkdirp("wd/$dir")
+	    }
+	}
+	if ($type eq "file") {
+	    my $file = $gitpath;
+
+	    if ($item->{changed} or $mdata_wd->{repos}{$repo}{name} eq "") {
+		copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
+	    } else {
+		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$file", "wd/$repo$file") or die;
+	    }
+	}
+	if ($type eq "link") {
+	    my $file = $gitpath;
+
 	    copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
-	} else {
-	    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$file", "wd/$repo$file") or die;
 	}
     }
-    if ($type eq "link") {
-	my $file = $gitpath;
 
-	copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
-    }
+    copy_or_hardlink("$pwd/README.md", "$outdir/wd/") or die;
+    copy_or_hardlink("$pwd/Makefile", "$outdir/wd/") or die;
 }
-
-copy_or_hardlink("$pwd/README.md", "$outdir/wd/") or die;
-copy_or_hardlink("$pwd/Makefile", "$outdir/wd/") or die;
 
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
