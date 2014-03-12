@@ -176,7 +176,34 @@ for my $repo (@repos) {
 
 print " -*- mode: Diff; eval: (orgstruct++-mode 1); -*-\n" unless $do_just_shas;
 
-my $last_manifest;
+sub revparse {
+    my ($head) = @_;
+    my $last = `git rev-parse '$head' 2>/dev/null`;
+    chomp($last);
+    if ($last =~ /[^0-9a-f]/ or
+	length($last) < 10) {
+	return undef;
+    } else {
+	return $last;
+    }
+}
+
+sub find_manifest_before {
+    my ($version) = @_;
+    my @versions = split(/\0/, `(cd .repo/manifests; git log -pretty=tformat:'%H' -z)`);
+
+    return $versions[0] unless $version;
+
+    for (my $i = 0; ; $i++) {
+	if (revparse("@{$i}") eq $version) {
+	    return revparse("@{".($i+1)."}");
+	}
+
+	last unless revparse("@{$i}");
+    }
+}
+
+my $last_manifest = find_manifest_before();
 
 while(1) {
     my @dates = sort { $b->[0] <=> $a->[0] } map { [$_->[0]{rawdate}, $_->[0], $_->[1]] } grep { defined($_->[0]) } map { [$_->peek, $_] } values(%r);
@@ -230,7 +257,7 @@ while(1) {
 	    print join(" ", @msg) . "\n";
 
 	    if ($repo eq ".repo/manifests/") {
-		$last_manifest = $entry->{sha};
+		$last_manifest = find_manifest_before($entry->{sha});
 		warn "manifest updated to $last_manifest";
 	    }
 	} else {
