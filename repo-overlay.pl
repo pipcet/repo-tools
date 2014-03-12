@@ -303,6 +303,7 @@ sub store_item {
     my ($item) = @_;
 
     $item->{repopath} =~ s/\/*$//;
+    die if $item->{repopath} =~ /\/\//;
     my $repopath = $item->{repopath};
 
     $item->{changed} = 1 if $repopath eq "";
@@ -579,13 +580,13 @@ unless ($do_new_symlinks) {
     chdir($pwd);
 }
 
-$repos = repos(get_head($repos, ".repo/manifests/"));
+%version = %{read_versions({})};
+$repos = repos(get_head($repos, ".repo/manifests/", undef, 1));
+%version = %{read_versions($repos)};
 
 for my $repo (values %$repos) {
     $repo->{name} = $repo->{manifest_name} // $repo->{name};
 }
-
-%version = %{read_versions($repos)};
 
 if (defined($apply_repo_name) and !defined($apply_repo)) {
     for my $repo (keys %version) {
@@ -709,17 +710,19 @@ store_item({repopath=>".", changed=>1});
 sub scan_repo {
     my ($repo) = @_;
     my $head = get_head($repos, $repo);
+    $version{$repo} = $head;
+    $repos->{$repo}{head} = $head;
     my $oldhead = $repos->{$repo}{oldhead};
     my $newhead = $repos->{$repo}{newhead};
 
     my $gitpath = repos_get_gitpath($repos, $repo);
-    next unless defined($gitpath);
+    return unless defined($gitpath);
 
     chdir($gitpath);
 
     store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
     if (begins_with(repo_master($repos->{$repo}{name}), "$pwd/")) {
-	store_item({repopath=>dirname($repo), oldtype=>"dir"});
+	store_item({repopath=>dirname($repo), oldtype=>"dir", changed=>1});
     } else {
 	store_item({repopath=>dirname($repo), oldtype=>"dir", changed=>1});
     }
@@ -759,19 +762,35 @@ sub scan_repo {
 	$do_rebuild_tree = 1;
 	warn "rebuild tree! $apply_repo";
 	my $new_repos = repos($apply);
+	for my $repo (values %$new_repos) {
+	    $repo->{name} = $repo->{manifest_name} // $repo->{name};
+	}
+
+	$version{$repo} = $head;
+	$new_repos->{$repo}{head} = $head;
 
 	chdir($pwd);
 	chdir($repo);
 	my $date = `git log -1 --pretty=tformat:\%ci $apply`;
 	warn "date is $date";
 
-	for my $repo (keys %$new_repos) {
+	my %rset;
+	for my $repo (keys %$new_repos,keys %$repos) {
+	    $rset{$repo} = 1;
+	}
+
+	for my $repo (keys %rset) {
 	    if ($new_repos->{$repo}{manifest_name} ne
 		$repos->{$repo}{manifest_name}) {
 		warn "tree rb: $repo changed from " . $repos->{$repo}{manifest_name} . " to " . $new_repos->{$repo}{manifest_name};
+		my $head = ($new_repos->{$repo}{name} ne "") ? get_head($new_repos, $repo, $date) : "";
 		my $diffstat =
 		    git_inter_diff($repos->{$repo}{gitpath}, $repos->{$repo}{head},
-				   $new_repos->{$repo}{gitpath}, get_head($new_repos, $repo, $date));
+				   $new_repos->{$repo}{gitpath}, $head);
+		if ($head ne "") {
+		    $version{$repo} = $head;
+		    $new_repos->{$repo}{head} = $head;
+		}
 
 		for my $path (keys %$diffstat) {
 		    my $stat = $diffstat->{$path};
@@ -781,23 +800,26 @@ sub scan_repo {
 		    } elsif ($stat eq "A") {
 			store_item({repopath=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??", changed=>1});
 		    } elsif ($stat eq "D") {
-			store_item({repopath=>$repo.$path, status=>" D", changed=>1});
+			store_item({repopath=>$repo.$path, newtype=>"none", status=>" D", changed=>1});
 		    } else {
 			die "$stat $path";
 		    }
 		}
 
-		nsystem("rm -rf $outdir/import/$repo") unless $repo =~ /^\/*$/;
-		nsystem("rm -rf $outdir/export/$repo") unless $repo =~ /^\/*$/;
+		if (!$do_emancipate) {
+		    nsystem("rm -rf $outdir/import/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+		    nsystem("rm -rf $outdir/export/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+		}
 		store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
 		scan_repo($repo);
 	    }
 	}
 
 	$repos = $new_repos;
+	%repo_master_cache = ("" => "$pwd");
     }
 
-    git_walk_tree($repo, "", $head);
+    git_walk_tree($repo, "", $head) unless $head eq "";
 }
 
 for my $repo (@repos) {
@@ -808,31 +830,33 @@ chdir($pwd);
 
 for my $item (values %items) {
     if (-l $item->{repopath}) {
-	$item->{newtype} = "link";
+	$item->{newtype} //= "link";
     } elsif (!-e $item->{repopath}) {
-	$item->{newtype} = "none";
+	$item->{newtype} //= "none";
     } elsif (-d $item->{repopath}) {
-	$item->{newtype} = "dir";
+	$item->{newtype} //= "dir";
     } elsif (-f $item->{repopath}) {
-	$item->{newtype} = "file";
+	$item->{newtype} //= "file";
     } else {
 	die;
     }
 
-    $item->{oldtype} = $item->{newtype} unless defined($item->{oldtype});
+    $item->{oldtype} //= $item->{newtype};
 }
 
 chdir($outdir);
+
 for my $item (values %items) {
     my $repo = $item->{repo};
-    next unless defined($repos->{$repo}{head}) or $do_new_symlinks;
+    my $head;
+    $head = get_head($repos, $repo) if ($repo ne "");
+    next unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
     next unless $items{dirname($repopath)}{changed};
     my $gitpath = $item->{gitpath};
     my $type = $item->{newtype};
     my $oldtype = $item->{oldtype};
-    my $head = $repos->{$repo}{head};
 
     if ($oldtype eq "dir") {
 	my $dir = $repopath;
