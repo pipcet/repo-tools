@@ -933,8 +933,6 @@ if ($do_new_symlinks) {
     setup_repo_links();
 }
 
-my @repos = $mdata_head->repos;
-
 if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     my $manifest = $apply_last_manifest // "HEAD";
     my $backrepos = repos($manifest);
@@ -952,11 +950,6 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     warn "resolved $apply_repo to $name\n";
 
     check_apply($apply, $apply_repo);
-}
-
-if (defined($apply) and defined($apply_repo) and
-    !$do_new_symlinks and !$do_new_versions) {
-    @repos = ($apply_repo);
 }
 
 sub get_base_version {
