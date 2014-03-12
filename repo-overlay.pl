@@ -811,24 +811,37 @@ sub scan_repo {
 	next;
     }
 
-    my %diffstat;
     if ($oldhead eq $newhead) {
-	%diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+	my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+
+	for my $path (keys %diffstat) {
+	    my $stat = $diffstat{$path};
+
+	    if ($stat eq "M") {
+		$dirstate_wd->store_item($repo.$path, {status=>" M", changed=>1});
+	    } elsif ($stat eq "A") {
+		$dirstate_wd->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "D") {
+		$dirstate_wd->store_item($repo.$path, {status=>" D", changed=>1});
+	    } else {
+		die "$stat $path";
+	    }
+	}
     } else {
-	%diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
-    }
+	my %diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
 
-    for my $path (keys %diffstat) {
-	my $stat = $diffstat{$path};
+	for my $path (keys %diffstat) {
+	    my $stat = $diffstat{$path};
 
-	if ($stat eq "M") {
-	    $dirstate_head->store_item($repo.$path, {status=>" M", changed=>1});
-	} elsif ($stat eq "A") {
-	    $dirstate_head->store_item($repo.$path, {status=>"??", changed=>1});
-	} elsif ($stat eq "D") {
-	    $dirstate_head->store_item($repo.$path, {status=>" D", changed=>1});
-	} else {
-	    die "$stat $path";
+	    if ($stat eq "M") {
+		$dirstate_head->store_item($repo.$path, {status=>" M", changed=>1});
+	    } elsif ($stat eq "A") {
+		$dirstate_head->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "D") {
+		$dirstate_head->store_item($repo.$path, {status=>" D", changed=>1});
+	    } else {
+		die "$stat $path";
+	    }
 	}
     }
 
