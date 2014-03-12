@@ -644,8 +644,8 @@ if (defined($apply) and defined($apply_repo) and
 }
 
 sub get_head {
-    my ($repos, $repo, $date) = @_;
-    $date //= "February 1"; # XXX
+    my ($repos, $repo, $date, $noupdate) = @_;
+    $date //= "March 1"; # XXX
 
     return $repos->{$repo}{head} if exists($repos->{$repo}{head});
 

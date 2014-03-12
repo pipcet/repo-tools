@@ -6,7 +6,7 @@ use strict;
 
 my $do_just_shas;
 my $commit_dir;
-my $since_date = "January.20";
+my $since_date = "February.28";
 my @repos;
 my @additional_repos;
 my @additional_dirs;
