@@ -195,7 +195,7 @@ sub store_item {
     }
 }
 
-sub git_walk_tree {
+sub git_walk_tree_head {
     my ($dirstate, $repo, $itempath, $head) = @_;
     my $mdata = $dirstate->{mdata};
     my $repopath = $mdata->{repos}{$repo}{path};
@@ -213,18 +213,19 @@ sub git_walk_tree {
 	next unless $dirstate->{items}{dirname($repo.$path)}{changed};
 
 	if ($m->{extmode} eq "120") {
-	    $dirstate->store_item({oldtype=>"link", repopath=>$repo.$path, repo=>$repo});
+	    $dirstate->store_item({type=>"link", repopath=>$repo.$path, repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
-	    $dirstate->store_item({oldtype=>"file", repopath=>$repo.$path, repo=>$repo});
+	    $dirstate->store_item({type=>"file", repopath=>$repo.$path, repo=>$repo});
 	} elsif ($m->{extmode} eq "040") {
-	    $dirstate->store_item({oldtype=>"dir", repopath=>$repo.$path, repo=>$repo});
-	    $dirstate->git_walk_tree($repo, $path, $head)
+	    $dirstate->store_item({type=>"dir", repopath=>$repo.$path, repo=>$repo});
+	    $dirstate->git_walk_tree_head($repo, $path, $head)
 		if $dirstate->{items}{$repo.$path}{changed};
 	} else {
 	    die "unknown mode";
 	}
     }
 }
+
 sub new {
     my ($class, $mdata) = @_;
 
@@ -255,7 +256,7 @@ sub read_versions {
     my $version = { };
     my $version_fh;
 
-    open $version_fh, "cat /dev/null \$(find $outdir/import/.pipcet-ro/versions/ -name version.txt)|";
+    open $version_fh, "cat /dev/null \$(find $outdir/head/.pipcet-ro/versions/ -name version.txt)|";
     while (<$version_fh>) {
 	chomp;
 
@@ -402,7 +403,7 @@ sub new {
 	$repos->{$repopath}{manifest_name} = $manifest_name;
 	$repos->{$repopath}{manifest_url} = $manifest_url;
 	$repos->{$repopath}{manifest_revision} = $manifest_revision;
-	$repos->{$repopath}{path} = "$outdir/import/$repopath";
+	$repos->{$repopath}{path} = "$outdir/head/$repopath";
 	$repos->{$repopath}{gitpath} = "$repos_by_name_dir/$manifest_name/repo";
     }
 
@@ -555,12 +556,12 @@ sub git_inter_diff {
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 
-nsystem("mkdir -p $outdir/import $outdir/export") or die;
--d "$outdir/import/.git" or die;
+nsystem("mkdir -p $outdir/head $outdir/wd") or die;
+-d "$outdir/head/.git" or die;
 
 if ($do_new_versions) {
     nsystem("rm -rf $outdir/versions/*");
-    nsystem("rm -rf $outdir/import/.pipcet-ro/versions/*");
+    nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
 }
 
 my %version;
@@ -662,16 +663,17 @@ chdir($pwd);
 
 my $version = get_base_version("$pwd/.repo/manifests");
 my $mdata = ManifestData->new($version);
-my $dirstate = new DirState($mdata);
+my $dirstate_head = new DirState($mdata);
+my $dirstate_wd = new DirState($mdata);
 
 unless ($do_new_symlinks) {
-    chdir("$outdir/import");
+    chdir("$outdir/head");
     my @dirs = split(/\0/, `find -name .git -prune -o -type d -print0`);
 
     for my $dir (@dirs) {
 	$dir =~ s/^\.\///;
 	$dir =~ s/\/*$//;
-	$dirstate->store_item({repopath=>$dir, changed=>1});
+	$dirstate_head->store_item({repopath=>$dir, changed=>1});
     }
 
     my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
@@ -679,7 +681,7 @@ unless ($do_new_symlinks) {
     for my $file (@files) {
 	$file =~ s/^\.\///;
 	$file =~ s/\/*$//;
-	$dirstate->store_item({repopath=>$file, changed=>1});
+	$dirstate_head->store_item({repopath=>$file, changed=>1});
     }
 
     chdir($pwd);
@@ -707,16 +709,16 @@ if (defined($apply_repo_name) and !defined($apply_repo)) {
 }
 
 if ($do_new_symlinks) {
-    nsystem("rm -rf $outdir/import/*");
-    nsystem("rm -rf $outdir/export/*");
-    nsystem("rm -rf $outdir/import/.repo");
-    nsystem("rm -rf $outdir/export/.repo");
+    nsystem("rm -rf $outdir/head/*");
+    nsystem("rm -rf $outdir/wd/*");
+    nsystem("rm -rf $outdir/head/.repo");
+    nsystem("rm -rf $outdir/wd/.repo");
 } elsif (defined($apply_repo)) {
     # rm -rf dangling-symlink/ doesn't delete anything. Learn
     # something new every day.
     die if $apply_repo =~ /^\/*$/;
-    nsystem("rm -rf $outdir/import/" . ($apply_repo =~ s/\/$//r));
-    nsystem("rm -rf $outdir/export/" . ($apply_repo =~ s/\/$//r));
+    nsystem("rm -rf $outdir/head/" . ($apply_repo =~ s/\/$//r));
+    nsystem("rm -rf $outdir/wd/" . ($apply_repo =~ s/\/$//r));
 }
 
 if (defined($apply) and defined($apply_repo) and
@@ -789,15 +791,15 @@ sub scan_repo {
 
     chdir($gitpath);
 
-    $dirstate->store_item({repopath=>($repo =~ s/\/*$//r), oldtype=>"dir", repo=>$repo});
+    $dirstate_head->store_item({repopath=>($repo =~ s/\/*$//r), type=>"dir", repo=>$repo});
     if (begins_with($mdata->repo_master($mdata->{repos}{$repo}{name}), "$pwd/")) {
-	$dirstate->store_item({repopath=>dirname($repo), oldtype=>"dir", changed=>1});
+	$dirstate_head->store_item({repopath=>dirname($repo), type=>"dir", changed=>1});
     } else {
-	$dirstate->store_item({repopath=>dirname($repo), oldtype=>"dir", changed=>1});
+	$dirstate_head->store_item({repopath=>dirname($repo), type=>"dir", changed=>1});
     }
 
     if (!defined($head)) {
-	$dirstate->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
+	$dirstate_head->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
 	$mdata->{repos}{$repo}{deleted} = 1;
 	next;
     }
@@ -813,17 +815,17 @@ sub scan_repo {
 	my $stat = $diffstat{$path};
 
 	if ($stat eq "M") {
-	    $dirstate->store_item({repopath=>$repo.$path, status=>" M", changed=>1});
+	    $dirstate_head->store_item({repopath=>$repo.$path, status=>" M", changed=>1});
 	} elsif ($stat eq "A") {
-	    $dirstate->store_item({repopath=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??", changed=>1});
+	    $dirstate_head->store_item({repopath=>$repo.$path, status=>"??", changed=>1});
 	} elsif ($stat eq "D") {
-	    $dirstate->store_item({repopath=>$repo.$path, status=>" D", changed=>1});
+	    $dirstate_head->store_item({repopath=>$repo.$path, status=>" D", changed=>1});
 	} else {
 	    die "$stat $path";
 	}
     }
 
-    if (!$dirstate->{items}{$repo =~ s/\/$//r}{changed}) {
+    if (!$dirstate_head->{items}{$repo =~ s/\/$//r}{changed}) {
 	next;
     }
 
@@ -865,21 +867,22 @@ sub scan_repo {
 		    my $stat = $diffstat->{$path};
 
 		    if ($stat eq "M") {
-			$dirstate->store_item({repopath=>$repo.$path, status=>" M", changed=>1});
+			$dirstate_head->store_item({repopath=>$repo.$path, status=>" M", changed=>1});
 		    } elsif ($stat eq "A") {
-			$dirstate->store_item({repopath=>$repo.$path, oldtype=>"none", repo=>$repo, status=>"??", changed=>1});
+			$dirstate_head->store_item({repopath=>$repo.$path, status=>"??", changed=>1});
 		    } elsif ($stat eq "D") {
-			$dirstate->store_item({repopath=>$repo.$path, newtype=>"none", status=>" D", changed=>1});
+			$dirstate_head->store_item({repopath=>$repo.$path, status=>" D", changed=>1});
 		    } else {
 			die "$stat $path";
 		    }
 		}
 
 		if (!$do_emancipate) {
-		    nsystem("rm -rf $outdir/import/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-		    nsystem("rm -rf $outdir/export/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+		    nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+		    nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
 		}
-		$dirstate->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
+		$dirstate_wd->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
+		$dirstate_head->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
 		scan_repo($repo);
 	    }
 	}
@@ -887,7 +890,7 @@ sub scan_repo {
 	$mdata = $new_mdata;
     }
 
-    $dirstate->git_walk_tree($repo, "", $head) unless $head eq "";
+    $dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
 }
 
 for my $repo (@repos) {
@@ -896,112 +899,122 @@ for my $repo (@repos) {
 
 chdir($pwd);
 
-for my $item (values %{$dirstate->{items}}) {
+for my $item (values %{$dirstate_wd->{items}}) {
     if (-l $item->{repopath}) {
-	$item->{newtype} //= "link";
+	$item->{type} //= "link";
     } elsif (!-e $item->{repopath}) {
-	$item->{newtype} //= "none";
+	$item->{type} //= "none";
     } elsif (-d $item->{repopath}) {
-	$item->{newtype} //= "dir";
+	$item->{type} //= "dir";
     } elsif (-f $item->{repopath}) {
-	$item->{newtype} //= "file";
+	$item->{type} //= "file";
     } else {
 	die;
     }
-
-    $item->{oldtype} //= $item->{newtype};
 }
 
 chdir($outdir);
 
-for my $item (values %{$dirstate->{items}}) {
+for my $item (values %{$dirstate_head->{items}}) {
     my $repo = $item->{repo};
     my $head;
     $head = $mdata->get_head($repo) if ($repo ne "");
     next unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
-    next unless $dirstate->{items}{dirname($repopath)}{changed};
+    next unless $dirstate_head->{items}{dirname($repopath)}{changed};
     my $gitpath = $item->{gitpath};
-    my $type = $item->{newtype};
-    my $oldtype = $item->{oldtype};
+    my $type = $item->{type};
 
-    if ($oldtype eq "dir") {
-	my $dir = $repopath;
-
-	die if $dir eq ".";
-	my $dirname = $dir;
-	while(!$dirstate->{items}{$dirname}{changed}) {
-	    ($dir, $dirname) = ($dirname, dirname($dirname));
-	}
-
-	if (!$dirstate->{items}{$dir}{changed}) {
-	    if (! (-e "import/$dir" || -l "import/$dir")) {
-		symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$gitpath", "import/$dir") or die;
-	    }
-	} else {
-	    mkdirp("import/$dir")
-	}
-    }
     if ($type eq "dir") {
 	my $dir = $repopath;
 
 	die if $dir eq ".";
 	my $dirname = $dir;
-	while(!$dirstate->{items}{$dirname}{changed}) {
+	while(!$dirstate_head->{items}{$dirname}{changed}) {
 	    ($dir, $dirname) = ($dirname, dirname($dirname));
 	}
 
-	if (!$dirstate->{items}{$dir}{changed}) {
-	    if (! (-e "export/$dir" || -l "export/$dir")) {
-		symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$gitpath", "export/$dir") or die;
+	if (!$dirstate_head->{items}{$dir}{changed}) {
+	    if (! (-e "head/$dir" || -l "head/$dir")) {
+		symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$gitpath", "head/$dir") or die;
 	    }
 	} else {
-	    mkdirp("export/$dir")
-	}
-    }
-    if ($oldtype eq "file") {
-	my $file = $gitpath;
-
-	if ($item->{changed} or $mdata->{repos}{$repo}{name} eq "") {
-	    cat_file($mdata->repo_master($mdata->{repos}{$repo}{name}, 1), $head, $file, "import/$repo$file");
-	} else {
-	    symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$file", "import/$repo$file") or die;
+	    mkdirp("head/$dir")
 	}
     }
     if ($type eq "file") {
 	my $file = $gitpath;
 
 	if ($item->{changed} or $mdata->{repos}{$repo}{name} eq "") {
-	    copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	    cat_file($mdata->repo_master($mdata->{repos}{$repo}{name}, 1), $head, $file, "head/$repo$file");
 	} else {
-	    symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$file", "export/$repo$file") or die;
+	    symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$file", "head/$repo$file") or die;
 	}
     }
-    if ($oldtype eq "link") {
+    if ($type eq "link") {
 	my $file = $gitpath;
 	my $dest = `(cd $pwd/$repo; git cat-file blob '$head':'$file')`;
 	chomp($dest);
-	symlink_absolute($dest, "import/$repo$file") or die;
+	symlink_absolute($dest, "head/$repo$file") or die;
+    }
+}
+
+for my $item (values %{$dirstate_wd->{items}}) {
+    my $repo = $item->{repo};
+    my $head;
+    $head = $mdata->get_head($repo) if ($repo ne "");
+    next unless defined($head) or $do_new_symlinks;
+    my $repopath = $item->{repopath};
+    next if $repopath eq "" or $repopath eq ".";
+    next unless $dirstate_wd->{items}{dirname($repopath)}{changed};
+    my $gitpath = $item->{gitpath};
+    my $type = $item->{type};
+
+    if ($type eq "dir") {
+	my $dir = $repopath;
+
+	die if $dir eq ".";
+	my $dirname = $dir;
+	while(!$dirstate_wd->{items}{$dirname}{changed}) {
+	    ($dir, $dirname) = ($dirname, dirname($dirname));
+	}
+
+	if (!$dirstate_wd->{items}{$dir}{changed}) {
+	    if (! (-e "wd/$dir" || -l "wd/$dir")) {
+		symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$gitpath", "wd/$dir") or die;
+	    }
+	} else {
+	    mkdirp("wd/$dir")
+	}
+    }
+    if ($type eq "file") {
+	my $file = $gitpath;
+
+	if ($item->{changed} or $mdata->{repos}{$repo}{name} eq "") {
+	    copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
+	} else {
+	    symlink_relative($mdata->repo_master($mdata->{repos}{$repo}{name}) . "/$file", "wd/$repo$file") or die;
+	}
     }
     if ($type eq "link") {
 	my $file = $gitpath;
 
-	copy_or_hardlink("$pwd/$repo$file", "export/$repo$file") or die;
+	copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
     }
 }
 
-copy_or_hardlink("$pwd/README.md", "$outdir/import/") or die;
-copy_or_hardlink("$pwd/README.md", "$outdir/export/") or die;
-copy_or_hardlink("$pwd/Makefile", "$outdir/import/") or die;
-copy_or_hardlink("$pwd/Makefile", "$outdir/export/") or die;
+copy_or_hardlink("$pwd/README.md", "$outdir/head/") or die;
+copy_or_hardlink("$pwd/README.md", "$outdir/wd/") or die;
+copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
+copy_or_hardlink("$pwd/Makefile", "$outdir/wd/") or die;
 
 # this must come after all symbolic links have been created, so ln
 # doesn't get confused about which relative path to use.
 nsystem("ln -s $pwd $outdir/repo-overlay") or die;
 
 if ($do_commit and defined($commit_message_file)) {
-    chdir("$outdir/import");
+    chdir("$outdir/head");
     if ($do_emancipate) {
 	nsystem("git add --all .; git commit -m 'emancipation commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
@@ -1018,8 +1031,8 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
     for my $repo (@repos) {
 	my $version_fh;
 
-	mkdirp("$outdir/import/.pipcet-ro/versions/$repo");
-	open $version_fh, ">$outdir/import/.pipcet-ro/versions/$repo"."version.txt";
+	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
+	open $version_fh, ">$outdir/head/.pipcet-ro/versions/$repo"."version.txt";
 	print $version_fh "$repo: ".$mdata->{repos}{$repo}{head}." ".$mdata->{repos}{$repo}{name}."\n";
 	close $version_fh;
     }
@@ -1034,9 +1047,9 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 chdir($pwd);
 
 # useful commands:
-#  repo-overlay.pl -- sync repository to export/ import/
-#  diff -ur repo-overlay/ export/|(cd repo-overlay; patch -p1) -- sync export/ to repository (doesn't handle new/deleted files)
-#  diff -urNx .git -x .repo -x out -x out-old repo-overlay/ export/|(cd repo-overlay; patch -p1)
+#  repo-overlay.pl -- sync repository to wd/ head/
+#  diff -ur repo-overlay/ wd/|(cd repo-overlay; patch -p1) -- sync wd/ to repository (doesn't handle new/deleted files)
+#  diff -urNx .git -x .repo -x out -x out-old repo-overlay/ wd/|(cd repo-overlay; patch -p1)
 
 # perl ~/repo-tools/repo-overlay.pl --new-symlinks --new-versions --out=/home/pip/tmp-repo-overlay
 # perl ~/repo-tools/repo-log.pl --just-shas|tac|while read && echo $REPLY && sh -c "perl ~/repo-tools/repo-overlay.pl $REPLY --out=/home/pip/tmp-repo-overlay"; do true; done
