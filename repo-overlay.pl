@@ -352,14 +352,14 @@ sub new {
 
     die unless $mdata;
 
-    my $ds = {
+    my $dirstate = {
 	items => {
 	    "" => { changed => 1 },
 	    "." => { changed => 1}, #XXX
 	},
 	mdata => $mdata, };
 
-    bless $ds, $class;
+    bless $dirstate, $class;
 
     return $ds;
 }
@@ -782,7 +782,6 @@ if (defined($apply) and defined($apply_repo)) {
 chdir($pwd);
 
 my $date = undef;
-
 my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
 my $dirstate_head = new DirState($mdata_head);
 
