@@ -94,7 +94,7 @@ sub repos_get_gitpath {
 	    $url = "https://github.com/" . $repos->{$repo}{name};
 	}
 
-	die "no repository for " . $repos->{$repo}{name} . " url $url";
+	warn "no repository for " . $repos->{$repo}{name} . " url $url";
 
 	#system("git clone $url $outdir/other-repositories/" . $repos->{$repo}{name});
 	return undef;
@@ -515,6 +515,7 @@ sub check_apply {
 	    }
 	    if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
 		nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
+		exit(0);
 		my $d = git_find_descendant("HEAD", $apply, $version{$repo});
 		$msg .= "but all will be good in the future.\n";
 		$msg .= "merge commit:\n";
@@ -632,7 +633,10 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     my $backrepos = repos($manifest);
     my $name = $backrepos->{$apply_repo}{manifest_name};
 
-    die "cannot resolve repo $apply_repo (manifest $manifest)" if (!defined($name));
+    unless (defined($name)) {
+	warn "cannot resolve repo $apply_repo (manifest $manifest)";
+	exit(0);
+    }
 
     $apply_repo_name = $name;
     $repos->{$apply_repo} = $backrepos->{$apply_repo};
