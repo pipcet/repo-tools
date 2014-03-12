@@ -778,8 +778,6 @@ sub update_manifest {
     warn "date is $date";
     my $new_mdata = ManifestData->new($apply, $date);
 
-    # XXX $new_mdata->{repos}{$repo}{head} = $head;
-
     chdir($pwd);
     chdir($repo);
 
@@ -788,7 +786,7 @@ sub update_manifest {
 	$rset{$repo} = 1;
     }
 
-    for my $repo (keys %rset) {
+    for my $repo (sort keys %rset) {
 	if ($new_mdata->{repos}{$repo}{name} ne
 	    $mdata->{repos}{$repo}{name}) {
 	    warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{name} . " to " . $new_mdata->{repos}{$repo}{name};
@@ -823,7 +821,6 @@ sub update_manifest {
     return $new_mdata;
 }
 
-
 # see comment at end of file
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 
@@ -843,9 +840,6 @@ chdir($pwd);
 
 my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
 my $dirstate_head = new DirState($mdata_head);
-
-my $mdata_wd = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
-my $dirstate_wd = new DirState($mdata_wd);
 
 unless ($do_new_symlinks) {
     chdir("$outdir/head");
@@ -898,7 +892,7 @@ if ($do_new_symlinks) {
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
     #XXX
-    $mdata_head->{repos}{$apply_repo}{name} = $mdata_head->{repos}{$apply_repo}{versioned_name};
+    die unless $mdata_head->{repos}{$apply_repo}{name} eq $mdata_head->{repos}{$apply_repo}{versioned_name};
 }
 
 if ($do_new_symlinks) {
@@ -923,6 +917,9 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
 
     check_apply($apply, $apply_repo);
 }
+
+my $mdata_wd = ManifestData->new(get_base_version("$pwd/.repo/manifests"));
+my $dirstate_wd = new DirState($mdata_wd);
 
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
