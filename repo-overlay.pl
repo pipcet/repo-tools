@@ -147,8 +147,9 @@ sub items {
 }
 
 sub store_item {
-    my ($dirstate, $item) = @_;
+    my ($dirstate, $path, $item) = @_;
     my $mdata = $dirstate->{mdata};
+    $item->{repopath} = $path;
 
     $item->{repopath} =~ s/\/*$//;
     die if $item->{repopath} =~ /\/\//;
@@ -197,7 +198,7 @@ sub store_item {
     my $dir = dirname($repopath);
     if (!$dirstate->{items}{$dir} ||
 	$item->{changed} > $dirstate->{items}{$dir}{changed}) {
-	$dirstate->store_item($item->{changed} ? {repopath=>dirname($repopath), changed=>1} : {repopath=>dirname($repopath)});
+	$dirstate->store_item(dirname($repopath), $item->{changed} ? {changed=>1} : {});
     }
 }
 
@@ -219,11 +220,11 @@ sub git_walk_tree_head {
 	next unless $dirstate->{items}{dirname($repo.$path)}{changed};
 
 	if ($m->{extmode} eq "120") {
-	    $dirstate->store_item({type=>"link", repopath=>$repo.$path, repo=>$repo});
+	    $dirstate->store_item($repo.$path, {type=>"link", repo=>$repo});
 	} elsif ($m->{extmode} eq "100") {
-	    $dirstate->store_item({type=>"file", repopath=>$repo.$path, repo=>$repo});
+	    $dirstate->store_item($repo.$path, {type=>"file", repo=>$repo});
 	} elsif ($m->{extmode} eq "040") {
-	    $dirstate->store_item({type=>"dir", repopath=>$repo.$path, repo=>$repo});
+	    $dirstate->store_item($repo.$path, {type=>"dir", repo=>$repo});
 	    $dirstate->git_walk_tree_head($repo, $path, $head)
 		if $dirstate->{items}{$repo.$path}{changed};
 	} else {
@@ -679,7 +680,7 @@ unless ($do_new_symlinks) {
     for my $dir (@dirs) {
 	$dir =~ s/^\.\///;
 	$dir =~ s/\/*$//;
-	$dirstate_head->store_item({repopath=>$dir, changed=>1});
+	$dirstate_head->store_item($dir, {changed=>1});
     }
 
     my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
@@ -687,7 +688,7 @@ unless ($do_new_symlinks) {
     for my $file (@files) {
 	$file =~ s/^\.\///;
 	$file =~ s/\/*$//;
-	$dirstate_head->store_item({repopath=>$file, changed=>1});
+	$dirstate_head->store_item($file, {changed=>1});
     }
 
     chdir($pwd);
@@ -797,15 +798,15 @@ sub scan_repo {
 
     chdir($gitpath);
 
-    $dirstate_head->store_item({repopath=>($repo =~ s/\/*$//r), type=>"dir", repo=>$repo});
+    $dirstate_head->store_item($repo, { type=>"dir", repo=>$repo});
     if (begins_with($mdata->repo_master($mdata->{repos}{$repo}{name}), "$pwd/")) {
-	$dirstate_head->store_item({repopath=>dirname($repo), type=>"dir", changed=>1});
+	$dirstate_head->store_item(dirname($repo), {type=>"dir", changed=>1});
     } else {
-	$dirstate_head->store_item({repopath=>dirname($repo), type=>"dir", changed=>1});
+	$dirstate_head->store_item(dirname($repo), {type=>"dir", changed=>1});
     }
 
     if (!defined($head)) {
-	$dirstate_head->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
+	$dirstate_head->store_item($repo, {changed=>1});
 	$mdata->{repos}{$repo}{deleted} = 1;
 	next;
     }
@@ -821,11 +822,11 @@ sub scan_repo {
 	my $stat = $diffstat{$path};
 
 	if ($stat eq "M") {
-	    $dirstate_head->store_item({repopath=>$repo.$path, status=>" M", changed=>1});
+	    $dirstate_head->store_item($repo.$path, {status=>" M", changed=>1});
 	} elsif ($stat eq "A") {
-	    $dirstate_head->store_item({repopath=>$repo.$path, status=>"??", changed=>1});
+	    $dirstate_head->store_item($repo.$path, {status=>"??", changed=>1});
 	} elsif ($stat eq "D") {
-	    $dirstate_head->store_item({repopath=>$repo.$path, status=>" D", changed=>1});
+	    $dirstate_head->store_item($repo.$path, {status=>" D", changed=>1});
 	} else {
 	    die "$stat $path";
 	}
@@ -873,11 +874,11 @@ sub scan_repo {
 		    my $stat = $diffstat->{$path};
 
 		    if ($stat eq "M") {
-			$dirstate_head->store_item({repopath=>$repo.$path, status=>" M", changed=>1});
+			$dirstate_head->store_item($repo.$path, {status=>" M", changed=>1});
 		    } elsif ($stat eq "A") {
-			$dirstate_head->store_item({repopath=>$repo.$path, status=>"??", changed=>1});
+			$dirstate_head->store_item($repo.$path, {status=>"??", changed=>1});
 		    } elsif ($stat eq "D") {
-			$dirstate_head->store_item({repopath=>$repo.$path, status=>" D", changed=>1});
+			$dirstate_head->store_item($repo.$path, {status=>" D", changed=>1});
 		    } else {
 			die "$stat $path";
 		    }
@@ -887,8 +888,8 @@ sub scan_repo {
 		    nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
 		    nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
 		}
-		$dirstate_wd->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
-		$dirstate_head->store_item({repopath=>($repo =~ s/\/*$//r), changed=>1});
+		$dirstate_wd->store_item($repo, {changed=>1});
+		$dirstate_head->store_item($repo, {changed=>1});
 		scan_repo($repo);
 	    }
 	}
