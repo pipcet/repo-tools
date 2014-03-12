@@ -361,7 +361,7 @@ sub new {
 
     bless $dirstate, $class;
 
-    return $ds;
+    return $dirstate;
 }
 
 package ManifestData;
@@ -848,8 +848,8 @@ if ($do_new_symlinks) {
 
 if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     my $manifest = $apply_last_manifest // "HEAD";
-    my $backrepos = repos($manifest);
-    my $name = $backrepos->{$apply_repo}{name};
+    my $mdata = new ManifestData($manifest);
+    my $name = $mdata->{repos}{$apply_repo}{name};
 
     unless (defined($name)) {
 	warn "cannot resolve repo $apply_repo (manifest $manifest)";
@@ -857,7 +857,7 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     }
 
     $apply_repo_name = $name;
-    $mdata_head->{repos}{$apply_repo} = $backrepos->{$apply_repo};
+    $mdata_head->{repos}{$apply_repo} = $mdata->{$apply_repo}; #XXX needed?
     $mdata_head->{repos}{$apply_repo}{name} = $name;
 
     warn "resolved $apply_repo to $name\n";
@@ -865,62 +865,68 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     check_apply($apply, $apply_repo);
 }
 
+sub update_manifest {
+    my $new_mdata;
+    my $repo = $apply_repo;
+    my $mdata = $mdata_head;
+    my $dirstate = $dirstate_head;
+
+    $do_rebuild_tree = 1;
+    warn "rebuild tree! $apply_repo";
+    my $date = `git log -1 --pretty=tformat:\%ci $apply`;
+    warn "date is $date";
+    my $new_mdata = ManifestData->new($apply, $date);
+
+    # XXX $new_mdata->{repos}{$repo}{head} = $head;
+
+    chdir($pwd);
+    chdir($repo);
+
+    my %rset;
+    for my $repo ($new_mdata->repos, $mdata->repos) {
+	$rset{$repo} = 1;
+    }
+
+    for my $repo (keys %rset) {
+	if ($new_mdata->{repos}{$repo}{name} ne
+	    $mdata->{repos}{$repo}{name}) {
+	    warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{name} . " to " . $new_mdata->{repos}{$repo}{name};
+	    my $head = ($new_mdata->{repos}{$repo}{name} ne "") ? $new_mdata->get_head($repo) : "";
+	    my $diffstat =
+		git_inter_diff($mdata->{repos}{$repo}{gitpath}, $mdata->{repos}{$repo}{head},
+			       $new_mdata->{repos}{$repo}{gitpath}, $head);
+
+	    for my $path (keys %$diffstat) {
+		my $stat = $diffstat->{$path};
+
+		if ($stat eq "M") {
+		    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+		} elsif ($stat eq "A") {
+		    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+		} elsif ($stat eq "D") {
+		    $dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+		} else {
+		    die "$stat $path";
+		}
+	    }
+
+	    if (!$do_emancipate) {
+		nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+		nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+	    }
+	    $dirstate->store_item($repo, {changed=>1});
+	    scan_repo($repo);
+	}
+    }
+
+    return $new_mdata;
+}
+
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
-    my $new_mdata;
 
     if ($apply_repo eq ".repo/manifests/") {
-	my $repo = $apply_repo;
-	my $mdata = $mdata_head;
-	my $dirstate = $dirstate_head;
-
-	$do_rebuild_tree = 1;
-	warn "rebuild tree! $apply_repo";
-	my $date = `git log -1 --pretty=tformat:\%ci $apply`;
-	warn "date is $date";
-	my $new_mdata = ManifestData->new($apply, $date);
-
-	# XXX $new_mdata->{repos}{$repo}{head} = $head;
-
-	chdir($pwd);
-	chdir($repo);
-
-	my %rset;
-	for my $repo ($new_mdata->repos, $mdata->repos) {
-	    $rset{$repo} = 1;
-	}
-
-	for my $repo (keys %rset) {
-	    if ($new_mdata->{repos}{$repo}{name} ne
-		$mdata->{repos}{$repo}{name}) {
-		warn "tree rb: $repo changed from " . $mdata->{repos}{$repo}{name} . " to " . $new_mdata->{repos}{$repo}{name};
-		my $head = ($new_mdata->{repos}{$repo}{name} ne "") ? $new_mdata->get_head($repo) : "";
-		my $diffstat =
-		    git_inter_diff($mdata->{repos}{$repo}{gitpath}, $mdata->{repos}{$repo}{head},
-				   $new_mdata->{repos}{$repo}{gitpath}, $head);
-
-		for my $path (keys %$diffstat) {
-		    my $stat = $diffstat->{$path};
-
-		    if ($stat eq "M") {
-			$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
-		    } elsif ($stat eq "A") {
-			$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-		    } elsif ($stat eq "D") {
-			$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
-		    } else {
-			die "$stat $path";
-		    }
-		}
-
-		if (!$do_emancipate) {
-		    nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-		    nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-		}
-		$dirstate->store_item($repo, {changed=>1});
-		scan_repo($repo);
-	    }
-	}
+	update_manifest();
     }
 
     for my $repo ($dirstate_head->repos) {
