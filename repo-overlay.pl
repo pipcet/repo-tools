@@ -974,6 +974,7 @@ for my $item ($dirstate_head->items) {
     my $repo = $item->{repo};
     my $head;
     $head = $mdata_head->get_head($repo) if ($repo ne "");
+    chdir($outdir);
     next unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
@@ -991,27 +992,27 @@ for my $item ($dirstate_head->items) {
 	}
 
 	if (!$dirstate_head->{items}{$dir}{changed}) {
-	    if (! (-e "head/$dir" || -l "head/$dir")) {
-		symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$gitpath", "head/$dir") or die;
+	    if (! (-e "$outdir/head/$dir" || -l "$outdir/head/$dir")) {
+		symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$gitpath", "$outdir/head/$dir") or die;
 	    }
 	} else {
-	    mkdirp("head/$dir")
+	    mkdirp("$outdir/head/$dir")
 	}
     }
     if ($type eq "file") {
 	my $file = $gitpath;
 
 	if ($item->{changed} or $mdata_head->{repos}{$repo}{name} eq "") {
-	    cat_file($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}, 1), $head, $file, "head/$repo$file");
+	    cat_file($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}, 1), $head, $file, "$outdir/head/$repo$file");
 	} else {
-	    symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$file", "head/$repo$file") or die;
+	    symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$file", "$outdir/head/$repo$file") or die;
 	}
     }
     if ($type eq "link") {
 	my $file = $gitpath;
 	my $dest = `(cd $pwd/$repo; git cat-file blob '$head':'$file')`;
 	chomp($dest);
-	symlink_absolute($dest, "head/$repo$file") or die;
+	symlink_absolute($dest, "$outdir/head/$repo$file") or die;
     }
 }
 
@@ -1065,6 +1066,7 @@ if ($do_wd) {
 	my $repo = $item->{repo};
 	my $head;
 	$head = $mdata_wd->get_head($repo) if ($repo ne "");
+	chdir($outdir);
 	next unless defined($head) or $do_new_symlinks;
 	my $repopath = $item->{repopath};
 	next if $repopath eq "" or $repopath eq ".";
@@ -1082,26 +1084,26 @@ if ($do_wd) {
 	    }
 
 	    if (!$dirstate_wd->{items}{$dir}{changed}) {
-		if (! (-e "wd/$dir" || -l "wd/$dir")) {
-		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "wd/$dir") or die;
+		if (! (-e "$outdir/wd/$dir" || -l "$outdir/wd/$dir")) {
+		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "$outdir/wd/$dir") or die;
 		}
 	    } else {
-		mkdirp("wd/$dir")
+		mkdirp("$outdir/wd/$dir")
 	    }
 	}
 	if ($type eq "file") {
 	    my $file = $gitpath;
 
 	    if ($item->{changed} or $mdata_wd->{repos}{$repo}{name} eq "") {
-		copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
+		copy_or_hardlink("$pwd/$repo$file", "$outdir/wd/$repo$file") or die;
 	    } else {
-		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$file", "wd/$repo$file") or die;
+		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$file", "$outdir/wd/$repo$file") or die;
 	    }
 	}
 	if ($type eq "link") {
 	    my $file = $gitpath;
 
-	    copy_or_hardlink("$pwd/$repo$file", "wd/$repo$file") or die;
+	    copy_or_hardlink("$pwd/$repo$file", "$outdir/wd/$repo$file") or die;
 	}
     }
 
