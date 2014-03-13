@@ -167,6 +167,57 @@ sub gitrepository {
     return $r->{gitrepository} = new Git::Repository(work_tree => $r->{gitpath});
 }
 
+sub get_head {
+    my ($r) = @_;
+
+    return $r->{head} if exists($r->{head});
+
+    my $mdata = $r->mdata;
+    my $repo = $r->{relpath};
+    my $date = $mdata->{date} // "";
+
+    my $branch = $r->run(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
+    $branch = substr($branch, 0, 40);
+
+    my $head;
+    if ($do_new_versions) {
+	$head = $r->revparse($branch) // $r->revparse("HEAD");
+    } else {
+	$mdata->read_versions();
+	$head = $mdata->{version}{$repo} // revparse($branch) // revparse("HEAD");
+    }
+
+    if ($repo eq ".repo/manifests/") {
+	warn "branch $branch head $head date $date";
+    }
+
+    die if $head eq "";
+
+    my $oldhead = $head;
+    my $newhead = $head;
+
+    if (defined($apply) && $apply_repo eq $repo) {
+	if (grep { $_ eq $head } git_parents($apply)) {
+	    $newhead = $apply;
+	    warn "successfully applied $apply to $repo";
+	    $apply_success = 1;
+	} else {
+	    warn "head $head didn't match any of " . join(", ", git_parents($apply)) . " to be replaced by $apply";
+	}
+    }
+    if (!$do_emancipate) {
+	$head = $newhead;
+    }
+
+    $mdata->{repos}{$repo}{oldhead} = $oldhead;
+    $mdata->{repos}{$repo}{newhead} = $newhead;
+    $mdata->{repos}{$repo}{head} = $head;
+
+    chdir($pwd);
+
+    return $head;
+}
+
 sub run {
     my ($r, @args) = @_;
 
@@ -174,13 +225,14 @@ sub run {
 }
 
 sub new {
-    my ($class, $path, $name, $url, $gitpath, $revision) = @_;
+    my ($class, $path, $name, $url, $fullpath, $gitpath, $revision) = @_;
     my $repo = bless {}, $class;
 
-    $repo->{path} = $path;
+    $repo->{relpath} = $path;
     $repo->{name} = $name;
     $repo->{url} = $url;
     $repo->{gitpath} = $gitpath;
+    $repo->{path} = $fullpath;
     $repo->{revision} = $revision;
 
     return $repo;
@@ -278,13 +330,8 @@ sub git_walk_tree_head {
     my ($dirstate, $repo, $itempath, $head) = @_;
     my $mdata = $dirstate->{mdata};
     my $r = $mdata->{repos}{$repo};
-    my $repopath = $mdata->{repos}{$repo}{path};
-    my $gitpath = $mdata->get_gitpath($repo);
 
-    die unless defined($gitpath);
-    chdir($gitpath);
-
-    my @lstree_lines = $r->run(ls_tree => "$head:$itempath");
+    my @lstree_lines = $r->run("ls-tree" => "$head:$itempath");
 
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $itempath.(($itempath eq "")?"":"/").$5 } } @lstree_lines;
 
@@ -367,7 +414,7 @@ sub scan_repo_find_changed {
     }
 
     if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, `git diff $oldhead..$newhead --name-status -z`);
+	my %diffstat = reverse split(/\0/, $r->run(diff => ""$oldhead..$newhead", "--name-status", "-z"`);
 
 	for my $path (keys %diffstat) {
 	    my $stat = $diffstat{$path};
@@ -595,21 +642,18 @@ sub new {
     for my $r (@res) {
 	my ($repopath, $name, $url, $revision) = @$r;
 	$repos->{$repopath} = new Repository($repopath, $name, $url,
+					     "$outdir/head/$repopath",
 					     "$repos_by_name_dir/$name/repo", $revision);
-	$repos->{$repopath}{relpath} = $repopath;
-	$repos->{$repopath}{name} = $name;
-	$repos->{$repopath}{url} = $url;
-	$repos->{$repopath}{revision} = $revision;
-	$repos->{$repopath}{path} = "$outdir/head/$repopath";
-	$repos->{$repopath}{gitpath} = "$repos_by_name_dir/$name/repo";
     }
 
     $repos->{".repo/repo/"} =
 	new Repository(".repo/repo/", ".repo/repo", "",
+		       "$outdir/head/.repo/repo",
 		       "$repos_by_name_dir/.repo/repo/repo");
 
     $repos->{".repo/manifests/"} =
 	new Repository(".repo/manifests/", ".repo/manifests", "",
+		       "$outdir/head/.repo/manifests",
 		       "$repos_by_name_dir/.repo/repo/repo");
 
     $md->{repos} = $repos;
