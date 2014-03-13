@@ -509,8 +509,8 @@ sub repos {
 }
 
 sub new {
-    my ($class, $version, $date, $repos_by_name_dir) = @_;
-    $repos_by_name_dir //= "$outdir/repos-by-name";
+    my ($class, $version, $date) = @_;
+    my $repos_by_name_dir = "$outdir/repos-by-name";
     my $md = {};
     my $repos = {};
 
@@ -718,11 +718,11 @@ sub git_find_descendant {
 }
 
 sub check_apply {
-    my ($apply, $apply_repo) = @_;
+    my ($mdata, $apply, $apply_repo) = @_;
 
     die if $apply eq "";
 
-    my %version = %{read_versions({})};
+    my %version = %{$mdata->read_versions({})};
 
     my $repo = $apply_repo;
     if (chdir($repo)) {
@@ -843,14 +843,14 @@ if ($do_new_versions) {
     nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
 }
 
-if (defined($apply) and defined($apply_repo)) {
-    check_apply($apply, $apply_repo);
-}
-
 chdir($pwd);
 
 my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
 my $dirstate_head = new DirState($mdata_head);
+
+if (defined($apply) and defined($apply_repo)) {
+    check_apply($mdata_head, $apply, $apply_repo);
+}
 
 unless ($do_new_symlinks) {
     chdir("$outdir/head");
@@ -882,9 +882,12 @@ if (defined($apply_repo_name) and !defined($apply_repo)) {
 	}
     }
 
-    die "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo_name);;
+    die "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
 
-    check_apply($apply, $apply_repo);
+    $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
+    $dirstate_head = new DirState($mdata_head);
+
+    check_apply($mdata_head, $apply, $apply_repo);
 }
 
 if ($do_new_symlinks) {
@@ -920,12 +923,12 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     }
 
     $apply_repo_name = $name;
-    $mdata_head->{repos}{$apply_repo} = $mdata->{$apply_repo}; #XXX needed?
+    $mdata_head->{repos}{$apply_repo} = $mdata->{repos}{$apply_repo}; #XXX needed?
     $mdata_head->{repos}{$apply_repo}{name} = $name;
 
     warn "resolved $apply_repo to $name\n";
 
-    check_apply($apply, $apply_repo);
+    check_apply($mdata_head, $apply, $apply_repo);
 }
 
 if (defined($apply) and defined($apply_repo) and
@@ -934,6 +937,14 @@ if (defined($apply) and defined($apply_repo) and
     if ($apply_repo eq ".repo/manifests/") {
 	$mdata_head = update_manifest($mdata_head, $dirstate_head);
 	$dirstate_head = new DirState($mdata_head);
+    }
+
+    for my $repo ($apply_repo) {
+	$mdata_head->get_head($repo);
+    }
+
+    for my $repo ($apply_repo) {
+	$dirstate_head->scan_repo_find_changed($repo);
     }
 
     for my $repo ($apply_repo) {
