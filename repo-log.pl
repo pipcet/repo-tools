@@ -3,6 +3,7 @@
 use Getopt::Long qw(:config auto_version auto_help);
 
 use strict;
+use Carp::Always;
 
 my $do_just_shas;
 my $commit_dir;
@@ -193,13 +194,24 @@ sub find_manifest_before {
 
     return $versions[0] unless $version;
 
-    for (my $i = 0; ; $i++) {
+    chdir(".repo/manifests") or die;
+
+    my $i;
+    for ($i = 0; ; $i++) {
 	if (revparse("\@{$i}") eq $version) {
-	    return revparse("\@{".($i+1)."}");
+	    warn "$version -> " . revparse("\@{".($i+1)."}");
+	    my $ret = revparse("\@{".($i+1)."}");
+	    chdir("../..");
+	    return $ret;
 	}
 
-	last unless revparse("\@{$i}");
+	last unless defined(revparse("\@{$i}"));
     }
+
+    warn "no version prior to $version, $i";
+    chdir("../..");
+
+    return undef;
 }
 
 my $last_manifest = find_manifest_before();
@@ -256,7 +268,7 @@ while(1) {
 	    print join(" ", @msg) . "\n";
 
 	    if ($repo eq ".repo/manifests/") {
-		$last_manifest //= find_manifest_before($entry->{sha});
+		$last_manifest = find_manifest_before($entry->{sha}) // $last_manifest;
 		warn "manifest updated to $last_manifest";
 	    }
 	} else {
