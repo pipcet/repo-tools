@@ -10,6 +10,8 @@ use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
 
+use Git::Repository;
+
 my $do_new_versions;
 my $do_new_symlinks;
 my $do_print_range;
@@ -157,6 +159,33 @@ sub name {
     return $r->{name};
 }
 
+sub gitrepository {
+    my ($r) = @_;
+
+    return $r->{gitrepository} if ($r->{gitrepository});
+
+    return $r->{gitrepository} = new Git::Repository(work_tree => $r->{gitpath});
+}
+
+sub run {
+    my ($r, @args) = @_;
+
+    return $r->gitrepository->run(@args);
+}
+
+sub new {
+    my ($class, $path, $name, $url, $gitpath, $revision) = @_;
+    my $repo = bless {}, $class;
+
+    $repo->{path} = $path;
+    $repo->{name} = $name;
+    $repo->{url} = $url;
+    $repo->{gitpath} = $gitpath;
+    $repo->{revision} = $revision;
+
+    return $repo;
+}
+
 package DirState;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
@@ -241,20 +270,21 @@ sub store_item {
     my $dir = dirname($repopath);
     if (!$dirstate->{items}{$dir} ||
 	$item->{changed} > $dirstate->{items}{$dir}{changed}) {
-	$dirstate->store_item(dirname($repopath), $item->{changed} ? {changed=>1} : {});
+	$dirstate->store_item(dirname($repopath), $item->{changed} ? {changed=>1, type=>"dir"} : {type=>"dir"});
     }
 }
 
 sub git_walk_tree_head {
     my ($dirstate, $repo, $itempath, $head) = @_;
     my $mdata = $dirstate->{mdata};
+    my $r = $mdata->{repos}{$repo};
     my $repopath = $mdata->{repos}{$repo}{path};
     my $gitpath = $mdata->get_gitpath($repo);
 
     die unless defined($gitpath);
     chdir($gitpath);
 
-    my @lstree_lines = split(/\0/, `git ls-tree '$head':'$itempath' -z`);
+    my @lstree_lines = $r->run(ls_tree => "$head:$itempath");
 
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $itempath.(($itempath eq "")?"":"/").$5 } } @lstree_lines;
 
@@ -485,8 +515,28 @@ sub repo_master {
     return $master;
 }
 
-
 sub get_gitpath {
+    my ($mdata, $repo) = @_;
+    my $gitpath = $mdata->{repos}{$repo}{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	my $url = $mdata->{repos}{$repo}{url};
+
+	if (!($url=~/\/\//)) {
+	    # XXX why is this strange fix needed?
+	    $url = "https://github.com/" . $mdata->{repos}{$repo}{name};
+	}
+
+	warn "no repository for " . $mdata->{repos}{$repo}{name} . " url $url";
+
+	#system("git clone $url $outdir/other-repositories/" . $mdata->{repos}{$repo}{name});
+	return undef;
+    }
+
+    return $gitpath;
+}
+
+sub get_git_repository {
     my ($mdata, $repo) = @_;
     my $gitpath = $mdata->{repos}{$repo}{gitpath};
 
@@ -544,6 +594,8 @@ sub new {
 
     for my $r (@res) {
 	my ($repopath, $name, $url, $revision) = @$r;
+	$repos->{$repopath} = new Repository($repopath, $name, $url,
+					     "$repos_by_name_dir/$name/repo", $revision);
 	$repos->{$repopath}{relpath} = $repopath;
 	$repos->{$repopath}{name} = $name;
 	$repos->{$repopath}{url} = $url;
@@ -552,19 +604,13 @@ sub new {
 	$repos->{$repopath}{gitpath} = "$repos_by_name_dir/$name/repo";
     }
 
-    $repos->{".repo/repo/"} = {
-	path => "$outdir/.repo/repo/",
-	gitpath => "$repos_by_name_dir/.repo/repo/repo",
-	name => ".repo/repo",
-	relpath => ".repo/repo/",
-    };
+    $repos->{".repo/repo/"} =
+	new Repository(".repo/repo/", ".repo/repo", "",
+		       "$repos_by_name_dir/.repo/repo/repo");
 
-    $repos->{".repo/manifests/"} = {
-	path => "$outdir/.repo/manifests/",
-	gitpath => "$repos_by_name_dir/.repo/manifests/repo",
-	name => ".repo/manifests",
-	relpath => ".repo/manifests/",
-    };
+    $repos->{".repo/manifests/"} =
+	new Repository(".repo/manifests/", ".repo/manifests", "",
+		       "$repos_by_name_dir/.repo/repo/repo");
 
     $md->{repos} = $repos;
 
@@ -869,8 +915,7 @@ if (defined($apply) and defined($apply_repo)) {
 }
 
 unless ($do_new_symlinks) {
-    chdir("$outdir/head");
-    my @dirs = split(/\0/, `find -name .git -prune -o -type d -print0`);
+    my @dirs = split(/\0/, `(cd '$outdir/head'; find -name .git -prune -o -type d -print0)`);
 
     for my $dir (@dirs) {
 	$dir =~ s/^\.\///;
@@ -878,7 +923,7 @@ unless ($do_new_symlinks) {
 	$dirstate_head->store_item($dir, {changed=>1});
     }
 
-    my @files = split(/\0/, `find -name .git -prune -o -type f -print0`);
+    my @files = split(/\0/, `(cd '$outdir/head'; find -name .git -prune -o -type f -print0)`);
 
     for my $file (@files) {
 	$file =~ s/^\.\///;
@@ -887,8 +932,6 @@ unless ($do_new_symlinks) {
     }
 
     # XXX links
-
-    chdir($pwd);
 }
 
 if (defined($apply_repo_name) and !defined($apply_repo)) {
