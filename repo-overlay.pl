@@ -373,6 +373,7 @@ sub git_find_untracked {
 sub scan_repo_find_changed {
     my ($dirstate, $repo) = @_;
     my $mdata = $dirstate->{mdata};
+    my $r = $mdata->{repos}{$repo};
     my $head = $mdata->get_head($repo);
     my $oldhead = $mdata->{repos}{$repo}{oldhead};
     my $newhead = $mdata->{repos}{$repo}{newhead};
@@ -414,7 +415,7 @@ sub scan_repo_find_changed {
     }
 
     if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, $r->run(diff => ""$oldhead..$newhead", "--name-status", "-z"`);
+	my %diffstat = reverse split(/\0/, $r->run(diff => "$oldhead..$newhead", "--name-status", "-z"));
 
 	for my $path (keys %diffstat) {
 	    my $stat = $diffstat{$path};
