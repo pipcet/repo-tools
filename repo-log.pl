@@ -194,7 +194,7 @@ sub find_manifest_before {
     return $versions[0] unless $version;
 
     for (my $i = 0; ; $i++) {
-	if (revparse("@{$i}") eq $version) {
+	if (revparse("\@{$i}") eq $version) {
 	    return revparse("\@{".($i+1)."}");
 	}
 
@@ -256,7 +256,7 @@ while(1) {
 	    print join(" ", @msg) . "\n";
 
 	    if ($repo eq ".repo/manifests/") {
-		$last_manifest = find_manifest_before($entry->{sha});
+		$last_manifest //= find_manifest_before($entry->{sha});
 		warn "manifest updated to $last_manifest";
 	    }
 	} else {
