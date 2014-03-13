@@ -389,16 +389,20 @@ sub read_versions {
     open $version_fh, "cat /dev/null \$(find $outdir/head/.pipcet-ro/versions/ -name version.txt)|";
     while (<$version_fh>) {
 	chomp;
+	next if /^#/;
+	s/#.*$//;
 
 	my $path;
 	my $head;
 	my $versioned_name;
+	my $versioned_url;
 
-	if (($path, $head, $versioned_name) = /^(.*): (.*) (.*)$/) {
+	if (($path, $head, $versioned_name, $versioned_url) = /^(.*): (.*) (.*) (.*)$/) {
 	    if ($head ne "") {
 		$version->{$path} = $head;
 	    }
 	    $mdata->{repos}{$path}{versioned_name} = $versioned_name;
+	    $mdata->{repos}{$path}{versioned_url} = $versioned_url;
 	}
     }
     close $version_fh;
@@ -844,6 +848,19 @@ if ($do_new_versions) {
 
 chdir($pwd);
 
+if ($do_new_versions) {
+    if (defined($apply_last_manifest) && !defined($date)) {
+	chdir($pwd."/.repo/manifests");
+	my $mdate = `git log -1 --pretty=tformat:\%ci $apply_last_manifest`;
+	chomp($mdate);
+	$date = $mdate;
+    }
+} else {
+    my $v = ManifestData::read_versions({});
+
+    $apply_last_manifest = $v->{".repo/manifests/"};
+}
+
 my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
 my $dirstate_head = new DirState($mdata_head);
 
@@ -1123,10 +1140,17 @@ if ($do_commit and defined($commit_message_file)) {
 if (($apply_success or $do_new_versions) and !$do_emancipate) {
     for my $repo ($mdata_head->repos) {
 	my $version_fh;
+	my $head = $mdata_head->get_head($repo);
+	my $name = $mdata_head->{repos}{$repo}{name};
+	my $url = $mdata_head->{repos}{$repo}{url};
+	my $path = $mdata_head->get_gitpath($repo);
+
+	my $comment = `(cd $path; git log -1 $head)`;
+	$comment =~ s/^/# /msg;
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/head/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$mdata_head->get_head($repo)." ".$mdata_head->{repos}{$repo}{name}."\n";
+	print $version_fh "$repo: $head $name $url\n$comment";
 	close $version_fh;
     }
 
