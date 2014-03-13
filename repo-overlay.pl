@@ -426,7 +426,8 @@ sub get_head {
     if ($do_new_versions) {
 	$head = revparse($branch) // revparse("HEAD");
     } else {
-#XXX	$head = $version{$repo} // revparse($branch) // revparse("HEAD");
+	$mdata->read_versions();
+	$head = $mdata->{version}{$repo} // revparse($branch) // revparse("HEAD");
     }
 
     die if $head eq "";
@@ -434,7 +435,7 @@ sub get_head {
     my $oldhead = $head;
     my $newhead = $head;
 
-    if (defined($apply)) {
+    if (defined($apply) && $apply_repo eq $repo) {
 	if (grep { $_ eq $head } git_parents($apply)) {
 	    $newhead = $apply;
 	    warn "successfully applied $apply to $repo";
@@ -821,11 +822,9 @@ sub update_manifest {
 		}
 	    }
 
-	    if (!$do_emancipate) {
-		nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-		nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-	    }
-	    $dirstate->store_item($repo, {changed=>1});
+	    nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+	    nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+	    $dirstate->store_item($repo, {changed=>1, type=>"dir"});
 	    $dirstate->scan_repo_find_changed($repo);
 	}
     }
@@ -869,6 +868,8 @@ unless ($do_new_symlinks) {
 	$file =~ s/\/*$//;
 	$dirstate_head->store_item($file, {changed=>1});
     }
+
+    # XXX links
 
     chdir($pwd);
 }
@@ -923,8 +924,6 @@ if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     }
 
     $apply_repo_name = $name;
-    $mdata_head->{repos}{$apply_repo} = $mdata->{repos}{$apply_repo}; #XXX needed?
-    $mdata_head->{repos}{$apply_repo}{name} = $name;
 
     warn "resolved $apply_repo to $name\n";
 
@@ -949,21 +948,17 @@ if (defined($apply) and defined($apply_repo) and
 
     for my $repo ($apply_repo) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->{repos}{$repo}{head};
+	my $head = $mdata->get_head($repo);
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 } else {
-    for my $repo ($dirstate_head->repos) {
-	$dirstate_head->store_item($repo, {changed=>1}); # XXX for nested repositories
-    }
-
     for my $repo ($dirstate_head->repos) {
 	$dirstate_head->scan_repo_find_changed($repo);
     }
 
     for my $repo ($dirstate_head->repos) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->{repos}{$repo}{head};
+	my $head = $mdata->get_head($repo);
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 }
@@ -1029,10 +1024,6 @@ if ($do_wd) {
 
     my $mdata_wd = ManifestData->new();
     my $dirstate_wd = new DirState($mdata_wd);
-
-    for my $repo ($dirstate_wd->repos) {
-	$dirstate_wd->store_item($repo, {changed => 1}); # XXX for nested repositories
-    }
 
     for my $repo ($dirstate_wd->repos) {
 	$dirstate_wd->scan_repo_find_changed($repo);
@@ -1135,11 +1126,12 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/head/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: ".$mdata_head->{repos}{$repo}{head}." ".$mdata_head->{repos}{$repo}{name}."\n";
+	print $version_fh "$repo: ".$mdata_head->get_head($repo)." ".$mdata_head->{repos}{$repo}{name}."\n";
 	close $version_fh;
     }
 
     if ($do_commit) {
+	chdir("$outdir/head");
 	nsystem("git add --all .; git commit -m 'versioning commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
