@@ -510,6 +510,22 @@ sub new {
     return $r;
 }
 
+package Item;
+use File::Basename qw(dirname);
+use File::Path qw(make_path);
+use Getopt::Long qw(:config auto_version auto_help);
+use File::PathConvert qw(abs2rel);
+use File::Copy::Recursive qw(fcopy);
+use Carp::Always;
+
+sub type {
+    my ($item) = @_;
+
+    return $item->{type};
+}
+
+
+
 package DirState;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
@@ -588,7 +604,7 @@ sub store_item {
 	$item->{gitpath} = prefix($repopath . "/", $item->{repo});
 	$item->{gitpath} =~ s/\/*$//;
     } else {
-	$dirstate->{items}{$repopath} = $item;
+	$dirstate->{items}{$repopath} = bless $item, "Item";
     }
 
     return if $repopath eq ".";
@@ -702,6 +718,56 @@ sub scan_repo_find_changed {
 	    }
 	}
     }
+}
+
+sub create_directory {
+    my ($dirstate, $outdir) = @_;
+
+    for my $item ($dirstate->items) {
+	my $repo = $item->{repo};
+	my $r = $item->{r};
+	my $head = $r && $r->head;
+	next unless defined($head) or $do_new_symlinks;
+	my $repopath = $item->{repopath};
+	next if $repopath eq "" or $repopath eq ".";
+	next unless $dirstate->changed(dirname($repopath));
+	my $gitpath = $item->{gitpath};
+	my $type = $item->{type};
+
+	if ($type eq "dir") {
+	    my $dir = $repopath;
+
+	    die if $dir eq ".";
+	    my $dirname = $dir;
+	    while(!$dirstate->changed($dirname)) {
+		($dir, $dirname) = ($dirname, dirname($dirname));
+	    }
+
+	    if (!$dirstate->changed($dir)) {
+		if (! (-e "$outdir/$dir" || -l "$outdir/$dir")) {
+		    symlink_relative($r->master . "/$gitpath", "$outdir/$dir") or die;
+		}
+	    } else {
+		mkdirp("$outdir/$dir");
+	    }
+	}
+	if ($type eq "file") {
+	    my $file = $gitpath;
+
+	    if ($item->{changed} or $mdata_head->{repos}{$repo}->name eq "") {
+		cat_file($r->master, $head, $file, "$outdir/$repo$file");
+	    } else {
+		symlink_relative($r->master . "/$file", "$outdir/$repo$file") or die;
+	    }
+	}
+	if ($type eq "link") {
+	    my $file = $gitpath;
+	    my $dest = `(cd '$pwd/$repo'; git cat-file blob '$head':'$file')`;
+	    chomp($dest);
+	    symlink_absolute($dest, "$outdir/$repo$file") or die;
+	}
+    }
+
 }
 
 sub new {
@@ -1324,53 +1390,7 @@ if (defined($apply) and defined($apply_repo) and
     }
 }
 
-chdir($outdir);
-
-for my $item ($dirstate_head->items) {
-    my $repo = $item->{repo};
-    my $r = $item->{r};
-    my $head = $r && $r->head;
-    chdir($outdir);
-    next unless defined($head) or $do_new_symlinks;
-    my $repopath = $item->{repopath};
-    next if $repopath eq "" or $repopath eq ".";
-    next unless $dirstate_head->changed(dirname($repopath));
-    my $gitpath = $item->{gitpath};
-    my $type = $item->{type};
-
-    if ($type eq "dir") {
-	my $dir = $repopath;
-
-	die if $dir eq ".";
-	my $dirname = $dir;
-	while(!$dirstate_head->changed($dirname)) {
-	    ($dir, $dirname) = ($dirname, dirname($dirname));
-	}
-
-	if (!$dirstate_head->changed($dir)) {
-	    if (! (-e "$outdir/head/$dir" || -l "$outdir/head/$dir")) {
-		symlink_relative($r->master . "/$gitpath", "$outdir/head/$dir") or die;
-	    }
-	} else {
-	    mkdirp("$outdir/head/$dir");
-	}
-    }
-    if ($type eq "file") {
-	my $file = $gitpath;
-
-	if ($item->{changed} or $mdata_head->{repos}{$repo}->name eq "") {
-	    cat_file($r->master, $head, $file, "$outdir/head/$repo$file");
-	} else {
-	    symlink_relative($r->master . "/$file", "$outdir/head/$repo$file") or die;
-	}
-    }
-    if ($type eq "link") {
-	my $file = $gitpath;
-	my $dest = `(cd '$pwd/$repo'; git cat-file blob '$head':'$file')`;
-	chomp($dest);
-	symlink_absolute($dest, "$outdir/head/$repo$file") or die;
-    }
-}
+$dirstate_head->create_directory("$outdir/head");
 
 copy_or_hardlink("$pwd/README.md", "$outdir/head/") or die;
 copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
