@@ -222,6 +222,47 @@ sub git {
 package Repository::Git::Head;
 use parent -norequire, "Repository::Git";
 
+sub head {
+    my ($r) = @_;
+
+    return $r->{head} if exists($r->{head});
+
+    my $mdata = $r->mdata;
+    my $repo = $r->{relpath};
+    my $date = $mdata->{date} // "";
+
+    my $branch = $r->git(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
+    $branch = substr($branch, 0, 40);
+
+    my $head;
+    if ($do_new_versions) {
+	$head = $r->revparse($branch) // $r->revparse("HEAD");
+    } else {
+	$mdata->read_versions();
+	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
+    }
+
+    if ($repo eq ".repo/manifests/") {
+	warn "branch $branch head $head date $date";
+    }
+
+    die if $head eq "";
+
+    my $oldhead = $head;
+    my $newhead = $head;
+
+    $r->{oldhead} = $oldhead;
+    $r->{newhead} = $newhead;
+    $r->{head} = $head;
+
+    chdir($pwd);
+
+    return $head;
+}
+
+package Repository::Git::Head::New;
+use parent -norequire, "Repository::Git::Head";
+
 sub gitpath {
     my ($r) = @_;
     my $gitpath = $r->{gitpath};
@@ -237,7 +278,75 @@ sub gitpath {
 
 	warn "no repository for " . $r->name . " url $url";
 
-	#system("git clone $url $outdir/other-repositories/" . $mdata->{repos}{$repo}{name});
+	#system("git clone $url $outdir/other-repositories/" . $r->name);
+	return undef;
+    }
+
+    return $gitpath;
+}
+
+sub head {
+    my ($r) = @_;
+
+    my $head = $r->SUPER::head;
+    my $repo = $r->{relpath};
+
+    my $oldhead = $head;
+    my $newhead = $head;
+
+    if (defined($apply) && $apply_repo eq $repo) {
+	if (grep { $_ eq $head } $r->git_parents($apply)) {
+	    $newhead = $apply;
+	    warn "successfully applied $apply to $repo";
+	    $apply_success = 1;
+	} else {
+	    warn "head $head didn't match any of " . join(", ", $r->git_parents($apply)) . " to be replaced by $apply";
+	}
+    }
+
+    if (!$do_emancipate) {
+	$head = $newhead;
+    }
+
+    $r->{oldhead} = $oldhead;
+    $r->{newhead} = $newhead;
+    $r->{head} = $head;
+
+    return $head;
+}
+
+sub new {
+    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
+    my $r = bless {}, $class;
+
+    $r->{mdata} = $mdata;
+    $r->{relpath} = $path;
+    $r->{name} = $name;
+    $r->{url} = $url;
+    $r->{gitpath} = $gitpath;
+
+    return $r;
+}
+
+package Repository::Git::WD;
+use parent -norequire, "Repository::Git";
+
+sub gitpath {
+    my ($r) = @_;
+    my $gitpath = $r->{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	my $mdata = $r->mdata;
+	my $url = $r->url;
+
+	if (!($url=~/\/\//)) {
+	    # XXX why is this strange fix needed?
+	    $url = "https://github.com/" . $r->name;
+	}
+
+	warn "no repository for " . $r->name . " url $url";
+
+	#system("git clone $url $outdir/other-repositories/" . $r->name);
 	return undef;
     }
 
@@ -282,9 +391,6 @@ sub head {
 	    warn "head $head didn't match any of " . join(", ", $r->git_parents($apply)) . " to be replaced by $apply";
 	}
     }
-    if ($r->{new} and !$do_emancipate) {
-	$head = $newhead;
-    }
 
     $r->{oldhead} = $oldhead;
     $r->{newhead} = $newhead;
@@ -296,7 +402,7 @@ sub head {
 }
 
 sub new {
-    my ($class, $mdata, $path, $name, $url, $gitpath, $new) = @_;
+    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
     my $r = bless {}, $class;
 
     $r->{mdata} = $mdata;
@@ -304,13 +410,9 @@ sub new {
     $r->{name} = $name;
     $r->{url} = $url;
     $r->{gitpath} = $gitpath;
-    $r->{new} = $new;
 
     return $r;
 }
-
-package Repository::Git::WD;
-use parent -norequire, "Repository::Git";
 
 package DirState;
 use File::Basename qw(dirname);
@@ -356,13 +458,13 @@ sub store_item {
 	}
 	$repo = dirname($repo) . "/";
     }
-    $item->{repo} = $repo = "" unless ($item->{r});
+    $item->{repo} = $repo = undef unless ($item->{r});
 
     die if $item->{repopath} =~ /\/\//;
     my $repopath = $item->{repopath};
 
     if (defined($item->{repo}) and !defined($item->{masterpath})) {
-	my $master = $mdata->repo_master($mdata->{repos}{$item->{repo}}{name});
+	my $master = $mdata->repo_master($mdata->{repos}{$item->{repo}}->name);
 	my $masterpath = $master . prefix($repopath, $item->{repo} =~ s/\/$//r);
 
 	$item->{masterpath} = $masterpath;
@@ -450,12 +552,12 @@ sub scan_repo_find_changed {
     my ($dirstate, $repo) = @_;
     my $mdata = $dirstate->{mdata};
     my $r = $mdata->{repos}{$repo};
-    my $head = $r->head();
+    my $head = $r->head;
     my $oldhead = $mdata->{repos}{$repo}{oldhead};
     my $newhead = $mdata->{repos}{$repo}{newhead};
 
     $dirstate->store_item($repo, { type=>"dir" });
-    if (begins_with($mdata->repo_master($mdata->{repos}{$repo}{name}), "$pwd/")) {
+    if (begins_with($mdata->repo_master($mdata->{repos}{$repo}->name), "$pwd/")) {
 	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
     } else {
 	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
@@ -600,13 +702,81 @@ sub repos {
     return sort keys %{$mdata->{repos}};
 }
 
+package ManifestData::Head;
+use parent -norequire, "ManifestData";
+
+sub new_repository {
+    my ($mdata, $repopath, $name, $url, $repodir) = @_;
+
+    $mdata->{repos}{$repopath} =
+	$mdata->repository_class->new($mdata, $repopath, $name, $url, $repodir);
+}
+
+package ManifestData::Head::New;
+use parent -norequire, "ManifestData::Head";
+
+sub repository_class {
+    return "Repository::Git::Head::New";
+}
+
+sub new {
+    my ($class, $version, $date) = @_;
+    my $repos_by_name_dir = "$outdir/repos-by-name";
+    my $mdata = bless {}, $class;
+
+    $mdata->{date} = $date;
+
+    if (!defined($version)) {
+	if (defined($date)) {
+	    $version = `cd $pwd/.repo/manifests; git log -1 --pretty=tformat:'\%H' --until='$date'`;
+	    chomp($version);
+	}
+    }
+
+    my @res;
+    if (defined($version)) {
+	die if $version eq "";
+	if (! -d "$outdir/manifests/$version/manifests") {
+	    nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
+	    nsystem("cp -a $pwd/.repo/local_manifests $outdir/manifests/$version/") or die;
+	    nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests") or die;
+	    nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
+	}
+
+	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url)`;
+    } else {
+	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url)`;
+    }
+
+    map { $_ = [split(/ : /)] } @res;
+
+    map { $_->[0] =~ s/\/*$/\//; } @res;
+
+    for my $r (@res) {
+	my ($repopath, $name, $url, $branchref) = @$r;
+	$mdata->new_repository($repopath, $name, $url,
+			       "$repos_by_name_dir/$name/repo");
+    }
+
+    $mdata->new_repository(".repo/repo/", ".repo/repo", "",
+			   "$repos_by_name_dir/.repo/repo/repo");
+
+    $mdata->new_repository(".repo/manifests/", ".repo/manifests", "",
+			   "$repos_by_name_dir/.repo/manifests/repo");
+
+    return $mdata;
+}
+
+package ManifestData::WD;
+use parent -norequire, "ManifestData";
+
 sub new {
     my ($class, $version, $date, $new) = @_;
     my $repos_by_name_dir = "$outdir/repos-by-name";
-    my $md = {};
+    my $mdata = {};
     my $repos = {};
 
-    $md->{date} = $date;
+    $mdata->{date} = $date;
 
     if (!defined($version)) {
 	if (defined($date)) {
@@ -637,29 +807,29 @@ sub new {
     for my $r (@res) {
 	my ($repopath, $name, $url, $branchref) = @$r;
 	$repos->{$repopath} =
-	    new Repository::Git::Head($md, $repopath, $name, $url,
-				      "$repos_by_name_dir/$name/repo", $new);
+	    new Repository::Git::WD($mdata, $repopath, $name, $url,
+				    "$repos_by_name_dir/$name/repo", $new);
     }
 
     $repos->{".repo/repo/"} =
-	new Repository::Git::Head($md, ".repo/repo/", ".repo/repo", "",
-				  "$repos_by_name_dir/.repo/repo/repo", $new);
+	new Repository::Git::WD($mdata, ".repo/repo/", ".repo/repo", "",
+				"$repos_by_name_dir/.repo/repo/repo", $new);
 
     $repos->{".repo/manifests/"} =
-	new Repository::Git::Head($md, ".repo/manifests/", ".repo/manifests", "",
-				  "$repos_by_name_dir/.repo/manifests/repo", $new);
+	new Repository::Git::WD($mdata, ".repo/manifests/", ".repo/manifests", "",
+				"$repos_by_name_dir/.repo/manifests/repo", $new);
 
-    $md->{repos} = $repos;
+    $mdata->{repos} = $repos;
 
-    bless $md, $class;
+    bless $mdata, $class;
 
-    return $md;
+    return $mdata;
 }
 
 package main;
 
 sub setup_repo_links {
-    my $head_mdata = ManifestData->new();
+    my $head_mdata = ManifestData::Head::New->new();
 
     system("rm -rf $outdir/repos-by-name");
     for my $repo (values %{$head_mdata->{repos}}) {
@@ -869,7 +1039,7 @@ sub update_manifest {
     warn "rebuild tree! $apply_repo";
     my $date = `git log -1 --pretty=tformat:\%ci $apply`;
     warn "date is $date";
-    my $new_mdata = new ManifestData($apply, $date, 1);
+    my $new_mdata = new ManifestData::Head::New($apply, $date, 1);
 
     chdir($pwd);
     chdir($repo);
@@ -940,7 +1110,7 @@ if ($do_new_versions) {
     $apply_last_manifest = $v->{".repo/manifests/"};
 }
 
-my $mdata_head = new ManifestData($apply_last_manifest, $date, 1);
+my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date, 1);
 my $dirstate_head = new DirState($mdata_head);
 
 if (defined($apply) and defined($apply_repo)) {
@@ -969,7 +1139,7 @@ unless ($do_new_symlinks) {
 
 if (defined($apply_repo_name) and !defined($apply_repo)) {
     for my $repo ($mdata_head->repos) {
-	if ($mdata_head->{repos}{$repo}{name} eq $apply_repo_name) {
+	if ($mdata_head->{repos}{$repo}->name eq $apply_repo_name) {
 	    $apply_repo = $repo;
 	    warn "found repo to apply to: $apply_repo for $apply_repo_name";
 	    last;
@@ -978,7 +1148,7 @@ if (defined($apply_repo_name) and !defined($apply_repo)) {
 
     retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
 
-    $mdata_head = new ManifestData($apply_last_manifest, $date, 1);
+    $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date, 1);
     $dirstate_head = new DirState($mdata_head);
 
     check_apply($mdata_head, $apply, $apply_repo);
@@ -999,7 +1169,7 @@ if ($do_new_symlinks) {
 
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
-    die if $mdata_head->{repos}{$apply_repo}{name} eq "";
+    die if $mdata_head->{repos}{$apply_repo}->name eq "";
 }
 
 if ($do_new_symlinks) {
@@ -1008,8 +1178,8 @@ if ($do_new_symlinks) {
 
 if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
     my $manifest = $apply_last_manifest // "HEAD";
-    my $mdata = new ManifestData($manifest);
-    my $name = $mdata->{repos}{$apply_repo}{name};
+    my $mdata = new ManifestData::Head::New($manifest);
+    my $name = $mdata->{repos}{$apply_repo}->name;
 
     unless (defined($name)) {
 	warn "cannot resolve repo $apply_repo (manifest $manifest)";
@@ -1051,7 +1221,7 @@ if (defined($apply) and defined($apply_repo) and
 
     for my $repo ($dirstate_head->repos) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->{repos}{$repo}->head();
+	my $head = $mdata->{repos}{$repo}->head;
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 }
@@ -1090,10 +1260,10 @@ for my $item ($dirstate_head->items) {
     if ($type eq "file") {
 	my $file = $gitpath;
 
-	if ($item->{changed} or $mdata_head->{repos}{$repo}{name} eq "") {
-	    cat_file($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}, 1), $head, $file, "$outdir/head/$repo$file");
+	if ($item->{changed} or $mdata_head->{repos}{$repo}->name eq "") {
+	    cat_file($mdata_head->repo_master($mdata_head->{repos}{$repo}->name, 1), $head, $file, "$outdir/head/$repo$file");
 	} else {
-	    symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$file", "$outdir/head/$repo$file") or die;
+	    symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}->name) . "/$file", "$outdir/head/$repo$file") or die;
 	}
     }
     if ($type eq "link") {
@@ -1115,7 +1285,7 @@ $do_wd &&= !(defined($apply) and defined($apply_repo) and
 if ($do_wd) {
     nsystem("mkdir -p $outdir/wd") or die;
 
-    my $mdata_wd = new ManifestData();
+    my $mdata_wd = new ManifestData::WD();
     my $dirstate_wd = new DirState($mdata_wd);
 
     for my $repo ($dirstate_wd->repos) {
@@ -1168,7 +1338,7 @@ if ($do_wd) {
 
 	    if (!$dirstate_wd->changed($dir)) {
 		if (! (-e "$outdir/wd/$dir" || -l "$outdir/wd/$dir")) {
-		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "$outdir/wd/$dir") or die;
+		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}->name) . "/$gitpath", "$outdir/wd/$dir") or die;
 		}
 	    } else {
 		mkdirp("$outdir/wd/$dir");
@@ -1177,10 +1347,10 @@ if ($do_wd) {
 	if ($type eq "file") {
 	    my $file = $gitpath;
 
-	    if ($item->{changed} or $mdata_wd->{repos}{$repo}{name} eq "") {
+	    if ($item->{changed} or $mdata_wd->{repos}{$repo}->name eq "") {
 		copy_or_hardlink("$pwd/$repo$file", "$outdir/wd/$repo$file") or die;
 	    } else {
-		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$file", "$outdir/wd/$repo$file") or die;
+		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}->name) . "/$file", "$outdir/wd/$repo$file") or die;
 	    }
 	}
 	if ($type eq "link") {
