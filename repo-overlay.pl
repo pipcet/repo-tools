@@ -822,6 +822,13 @@ sub store_item {
 	}
 	$repo = dirname($repo) . "/";
     }
+
+    if ($repo eq "./") {
+	my $r = $mdata->{repos}{"/"};
+	$item->{repo} = "/";
+	$item->{r} = $r;
+    }
+
     $item->{repo} = $repo = undef unless ($item->{r});
 
     die if $item->{repopath} =~ /\/\//;
@@ -843,7 +850,7 @@ sub store_item {
 
     $item->{changed} = 1 if $repopath eq "";
 
-    $item->{gitpath} = prefix($repopath . "/", $item->{repo});
+    $item->{gitpath} = prefix($repopath, $item->{repo} =~ s/\/*$//r);
     $item->{gitpath} =~ s/\/*$//;
 
     my $olditem = $dirstate->{items}{$repopath};
@@ -853,7 +860,7 @@ sub store_item {
 	    $olditem->{$key} = $item->{$key};
 	}
 	$item = $olditem;
-	$item->{gitpath} = prefix($repopath . "/", $item->{repo});
+	$item->{gitpath} = prefix($repopath, $item->{repo} =~ s/\/*$//r);
 	$item->{gitpath} =~ s/\/*$//;
     } else {
 	$dirstate->{items}{$repopath} = bless $item, "Item";
