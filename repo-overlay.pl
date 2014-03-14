@@ -978,7 +978,7 @@ sub symlink_relative {
     if (begins_with($src, "$pwd/", \$noprefix)) {
 	$src = "$outdir/repo-overlay/$noprefix";
     }
-    my $relsrc = abs2rel($src, $outdir."/".dirname($dst));
+    my $relsrc = abs2rel($src, dirname($dst));
 
     mkdirp(dirname($dst)) or die "cannot make symlink $dst -> $relsrc";
 
