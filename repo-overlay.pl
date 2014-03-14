@@ -752,7 +752,6 @@ sub store_item {
     return if $repopath eq ".";
 
     my $dir = dirname($repopath);
-    store_item($dirstate, $dir, {});
     if (!$dirstate->{items}{$dir} ||
 	$item->{changed} > $dirstate->{items}{$dir}{changed}) {
 	$dirstate->store_item(dirname($repopath), $item->{changed} ? {changed=>1, type=>"dir"} : {type=>"dir"});
@@ -770,7 +769,6 @@ sub git_walk_tree_head {
 
     for my $m (@modes) {
 	my $path = $m->{path};
-	next unless $dirstate->changed($repo.$path);
 
 	if ($m->{extmode} eq "120") {
 	    $dirstate->store_item($repo.$path, {type=>"link"});
@@ -793,7 +791,7 @@ sub git_find_untracked {
     my @files = split(/\0/, `find -maxdepth 1 -print0`);
 
     for my $file (@files) {
-	next if ($dirstate->{mdata}{repos}{$file . "/"});
+	next if ($dirstate->mdata->{repos}{$file . "/"});
 	push @res, $file;
 	if (-d $file) {
 	    push @res, $dirstate->git_find_untracked($file);
@@ -808,8 +806,8 @@ sub scan_repo_find_changed {
     my $mdata = $dirstate->{mdata};
     my $r = $mdata->{repos}{$repo};
     my $head = $r->head;
-    my $oldhead = $mdata->{repos}{$repo}{oldhead};
-    my $newhead = $mdata->{repos}{$repo}{newhead};
+    my $oldhead = $r->{oldhead};
+    my $newhead = $r->{newhead};
 
     $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($r->master, "$pwd/")) {
