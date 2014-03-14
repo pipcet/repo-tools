@@ -171,9 +171,7 @@ our sub symlink_absolute {
 our sub copy_or_hardlink {
     my ($src, $dst) = @_;
 
-    fcopy($src, $dst);
-
-    return 1;
+    return fcopy($src, $dst);
 }
 
 our sub cat_file {
