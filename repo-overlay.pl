@@ -1055,8 +1055,8 @@ chdir($outdir);
 
 for my $item ($dirstate_head->items) {
     my $repo = $item->{repo};
-    my $head;
-    $head = $mdata_head->{repos}{$repo}->head() if ($repo ne "");
+    my $r = $item->{r};
+    my $head = $r && $r->head;
     chdir($outdir);
     next unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
