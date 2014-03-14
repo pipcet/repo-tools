@@ -727,9 +727,7 @@ sub create {
 	return;
     }
 
-    my $head = $r && $r->head;
-
-    return unless defined($head) or $do_new_symlinks;
+    return unless $r or $do_new_symlinks;
     my $repopath = $item->{repopath};
     return if $repopath eq "" or $repopath eq ".";
     return unless $dirstate->changed(dirname($repopath));
