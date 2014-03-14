@@ -1234,14 +1234,13 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 	my $head = $r->head();
 	my $name = $r->name;
 	my $url = $r->url;
-	my $path = $r->path;
 
 	my $comment = $r->git(log => "-1", "$head");
 	$comment =~ s/^/# /msg;
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
 	open $version_fh, ">$outdir/head/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: $head $name $url\n$comment";
+	print $version_fh "$repo: $head $name $url\n$comment\n";
 	close $version_fh;
     }
 
