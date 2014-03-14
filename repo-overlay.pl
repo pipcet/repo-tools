@@ -638,6 +638,20 @@ sub new {
 package Repository::WD;
 use parent -norequire, "Repository";
 
+sub create_file {
+    my ($r, $file, $dst) = @_;
+    my $repo = $r->relpath;
+
+    copy_or_hardlink("$pwd/$repo$file", $dst) or die;
+}
+
+sub create_link {
+    my ($r, $file, $dst) = @_;
+    my $repo = $r->relpath;
+
+    copy_or_hardlink("$pwd/$repo$file", $dst) or die;
+}
+
 sub find_changed {
     my ($r, $dirstate, $dir) = @_;
 
