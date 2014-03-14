@@ -84,11 +84,18 @@ if (defined($commit_commitdate) and !$do_emancipate) {
     print "$commit_commitdate\n";
 }
 
+# like die, but without the dying part
+our sub retire {
+    warn @_;
+
+    exit(0);
+}
+
 # like system(), but not the return value and echo command
 our sub nsystem {
     my ($cmd) = @_;
 
-#    warn "running $cmd";
+    warn "running $cmd";
 
     return !system($cmd);
 }
@@ -103,21 +110,6 @@ our sub oldrevparse {
     } else {
 	return $last;
     }
-}
-
-our sub oldgit_parents {
-    my ($commit) = @_;
-
-    my $i = 1;
-    my $p;
-    my @res;
-
-    while (defined($p = oldrevparse("$commit^$i"))) {
-	push @res, $p;
-	$i++;
-    }
-
-    return @res;
 }
 
 our sub begins_with {
@@ -161,6 +153,12 @@ sub path {
     return $r->{path};
 }
 
+sub relpath {
+    my ($r) = @_;
+
+    return $r->{relpath};
+}
+
 sub name {
     my ($r) = @_;
 
@@ -184,7 +182,7 @@ sub get_head {
     my $repo = $r->{relpath};
     my $date = $mdata->{date} // "";
 
-    my $branch = $r->run(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
+    my $branch = $r->git(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
     $branch = substr($branch, 0, 40);
 
     my $head;
@@ -228,7 +226,7 @@ sub get_head {
 
 sub revparse {
     my ($r, $head) = @_;
-    my $last = $r->run("rev-parse" => $head, {fatal=>-128});
+    my $last = $r->git("rev-parse" => $head, {fatal=>-128, quiet=>1});
     chomp($last);
     if ($last =~ /[^0-9a-f]/ or
 	length($last) < 10) {
@@ -253,8 +251,24 @@ sub git_parents {
     return @res;
 }
 
+# find an oldest ancestor of $head that's still a descendant of $a and $b.
+sub git_find_descendant {
+    my ($r, $head, $a, $b) = @_;
 
-sub run {
+    my $d;
+
+    for my $p ($r->git_parents($head)) {
+	if (nsystem("git merge-base --is-ancestor $p $a") and
+	    nsystem("git merge-base --is-ancestor $p $b")) {
+	    return $r->git_find_descendant($p, $a, $b);
+	}
+    }
+
+    return $head;
+}
+
+
+sub git {
     my ($r, @args) = @_;
 
     return $r->gitrepository->run(@args);
@@ -374,7 +388,7 @@ sub git_walk_tree_head {
     my $mdata = $dirstate->{mdata};
     my $r = $mdata->{repos}{$repo};
 
-    my @lstree_lines = $r->run("ls-tree" => "$head:$itempath");
+    my @lstree_lines = $r->git("ls-tree" => "$head:$itempath");
 
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $itempath.(($itempath eq "")?"":"/").$5 } } @lstree_lines;
 
@@ -458,7 +472,7 @@ sub scan_repo_find_changed {
     }
 
     if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, $r->run(diff => "$oldhead..$newhead", "--name-status", "-z"));
+	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
 
 	for my $path (keys %diffstat) {
 	    my $stat = $diffstat{$path};
@@ -595,6 +609,16 @@ sub get_git_repository {
     return $gitpath;
 }
 
+sub repositories {
+    my ($mdata, $pattern) = @_;
+
+    if (defined($pattern)) {
+	return $mdata->{repos}{$pattern};
+    } else {
+	return map { $mdata->{repos}{$_} } $mdata->repos;
+    }
+}
+
 sub repos {
     my ($mdata) = @_;
 
@@ -612,7 +636,6 @@ sub new {
     my @res;
     if (defined($version)) {
 	die if $version eq "";
-	nsystem("rm -rf $outdir/manifests/$version");
 	if (! -d "$outdir/manifests/$version/manifests") {
 	    nsystem("mkdir -p $outdir/manifests/$version/manifests") or die;
 	    nsystem("cp -a $pwd/.repo/local_manifests $outdir/manifests/$version/") or die;
@@ -784,22 +807,6 @@ sub get_base_version {
     return $head;
 }
 
-# find an oldest ancestor of $head that's still a descendant of $a and $b.
-sub git_find_descendant {
-    my ($head, $a, $b) = @_;
-
-    my $d;
-
-    for my $p (oldgit_parents($head)) {
-	if (nsystem("git merge-base --is-ancestor $p $a") and
-	    nsystem("git merge-base --is-ancestor $p $b")) {
-	    return git_find_descendant($p, $a, $b);
-	}
-    }
-
-    return $head;
-}
-
 sub check_apply {
     my ($mdata, $apply, $apply_repo) = @_;
 
@@ -826,7 +833,7 @@ sub check_apply {
 	    if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
 		nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
 		exit(0);
-		my $d = git_find_descendant("HEAD", $apply, $version{$repo});
+		my $d = $r->git_find_descendant("HEAD", $apply, $version{$repo});
 		$msg .= "but all will be good in the future.\n";
 		$msg .= "merge commit:\n";
 
@@ -930,7 +937,7 @@ chdir($pwd);
 
 if ($do_new_versions) {
     if (defined($apply_last_manifest) && !defined($date)) {
-	my $mdate = `(cd '$pwd/.repo/manifests; git log -1 --pretty=tformat:\%ci $apply_last_manifest)`;
+	my $mdate = `(cd '$pwd/.repo/manifests'; git log -1 --pretty=tformat:\%ci $apply_last_manifest)`;
 	chomp($mdate);
 	$date = $mdate;
     }
@@ -976,7 +983,7 @@ if (defined($apply_repo_name) and !defined($apply_repo)) {
 	}
     }
 
-    die "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
+    retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
 
     $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
     $dirstate_head = new DirState($mdata_head);
@@ -999,7 +1006,7 @@ if ($do_new_symlinks) {
 
 if (defined($apply) and defined($apply_repo) and
     !$do_new_symlinks and !$do_new_versions) {
-    die unless $mdata_head->{repos}{$apply_repo}{name} eq $mdata_head->{repos}{$apply_repo}{versioned_name};
+    die if $mdata_head->{repos}{$apply_repo}{name} eq "";
 }
 
 if ($do_new_symlinks) {
@@ -1032,7 +1039,7 @@ if (defined($apply) and defined($apply_repo) and
     }
 
     for my $repo ($apply_repo) {
-	$mdata_head->{repos}{$apply_repo}->get_head();
+	$mdata_head->repositories($apply_repo)->get_head();
     }
 
     for my $repo ($apply_repo) {
@@ -1041,7 +1048,7 @@ if (defined($apply) and defined($apply_repo) and
 
     for my $repo ($apply_repo) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->{repos}{$repo}->get_head();
+	my $head = $mdata->repositories($repo)->get_head();
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 } else {
@@ -1084,7 +1091,7 @@ for my $item ($dirstate_head->items) {
 		symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$gitpath", "$outdir/head/$dir") or die;
 	    }
 	} else {
-	    mkdirp("$outdir/head/$dir")
+	    mkdirp("$outdir/head/$dir");
 	}
     }
     if ($type eq "file") {
@@ -1098,7 +1105,7 @@ for my $item ($dirstate_head->items) {
     }
     if ($type eq "link") {
 	my $file = $gitpath;
-	my $dest = `(cd $pwd/$repo; git cat-file blob '$head':'$file')`;
+	my $dest = `(cd '$pwd/$repo'; git cat-file blob '$head':'$file')`;
 	chomp($dest);
 	symlink_absolute($dest, "$outdir/head/$repo$file") or die;
     }
@@ -1170,7 +1177,7 @@ if ($do_wd) {
 		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "$outdir/wd/$dir") or die;
 		}
 	    } else {
-		mkdirp("$outdir/wd/$dir")
+		mkdirp("$outdir/wd/$dir");
 	    }
 	}
 	if ($type eq "file") {
@@ -1200,26 +1207,27 @@ nsystem("ln -s $pwd $outdir/repo-overlay") or die;
 if ($do_commit and defined($commit_message_file)) {
     chdir("$outdir/head");
     if ($do_emancipate) {
-	nsystem("git add --all .; git commit -m 'emancipation commit for $apply' " .
+	nsystem("cd $outdir/head; git add --all .; git commit -m 'emancipation commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : ""));
     } else {
-	nsystem("git commit --allow-empty -m 'COMMITTING REPO CHANGES'") if ($apply_repo eq ".repo/manifests/");
-	nsystem("git add --all .; git commit --allow-empty -F $commit_message_file " .
+	nsystem("cd $outdir/head; git commit --allow-empty -m 'COMMITTING REPO CHANGES'") if ($apply_repo eq ".repo/manifests/");
+	nsystem("cd $outdir/head; git add --all .; git commit --allow-empty -F $commit_message_file " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
 		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
     }
 }
 
 if (($apply_success or $do_new_versions) and !$do_emancipate) {
-    for my $repo ($mdata_head->repos) {
+    for my $r ($mdata_head->repositories) {
+	my $repo = $r->relpath;
 	my $version_fh;
-	my $head = $mdata_head->get_head($repo);
-	my $name = $mdata_head->{repos}{$repo}{name};
-	my $url = $mdata_head->{repos}{$repo}{url};
-	my $path = $mdata_head->get_gitpath($repo);
+	my $head = $r->get_head();
+	my $name = $r->name;
+	my $url = $r->url;
+	my $path = $r->path;
 
-	my $comment = `(cd $path; git log -1 $head)`;
+	my $comment = $r->git(log => "-1", "$head");
 	$comment =~ s/^/# /msg;
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
