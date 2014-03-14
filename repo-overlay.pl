@@ -32,7 +32,7 @@ my $apply_last_manifest;
 my $outdir;
 my $indir = ".";
 
-my $branch = '@{February.1}';
+my $branch = '@{February.1}'; # XXX
 my $commit_message_file;
 
 my $commit_commitdate;
@@ -95,7 +95,7 @@ our sub retire {
 our sub nsystem {
     my ($cmd) = @_;
 
-    warn "running $cmd";
+    #warn "running $cmd";
 
     return !system($cmd);
 }
@@ -239,7 +239,7 @@ sub head {
 	$head = $r->revparse($branch) // $r->revparse("HEAD");
     } else {
 	$mdata->read_versions();
-	$head = $mdata->{version}{$repo} // $r->revparse($branch) // $r->revparse("HEAD");
+	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
     }
 
     if ($repo eq ".repo/manifests/") {
@@ -519,14 +519,15 @@ use Carp::Always;
 
 sub read_versions {
     my ($mdata) = @_;
+
+    return $mdata->{version} if $mdata->{version};
+
     my $version = { };
     my $version_fh;
 
-    open $version_fh, "cat /dev/null \$(find $outdir/head/.pipcet-ro/versions/ -name version.txt)|";
+    open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/ -name version.txt`|";
     while (<$version_fh>) {
 	chomp;
-	next if /^#/;
-	s/#.*$//;
 
 	my $path;
 	my $head;
@@ -541,7 +542,9 @@ sub read_versions {
     }
     close $version_fh;
 
-    return $mdata->{version} = $version;
+    $mdata->{version} = $version;
+
+    return $version;
 }
 
 sub repo_master {
@@ -627,12 +630,19 @@ sub repos {
 }
 
 sub new {
-    my ($class, $version, $date) = @_;
+    my ($class, $version, $date, $new) = @_;
     my $repos_by_name_dir = "$outdir/repos-by-name";
     my $md = {};
     my $repos = {};
 
     $md->{date} = $date;
+
+    if (!defined($version)) {
+	if (defined($date)) {
+	    $version = `cd $pwd/.repo/manifests; git log -1 --pretty=tformat:'\%H' --until='$date'`;
+	    chomp($version);
+	}
+    }
 
     my @res;
     if (defined($version)) {
@@ -654,22 +664,19 @@ sub new {
     map { $_->[0] =~ s/\/*$/\//; } @res;
 
     for my $r (@res) {
-	my ($repopath, $name, $url, $revision) = @$r;
+	my ($repopath, $name, $url, $branchref) = @$r;
 	$repos->{$repopath} =
 	    new Repository::Git::Head($md, $repopath, $name, $url,
-				      "$outdir/head/$repopath",
-				      "$repos_by_name_dir/$name/repo", $revision);
+				      "$repos_by_name_dir/$name/repo", $new);
     }
 
     $repos->{".repo/repo/"} =
 	new Repository::Git::Head($md, ".repo/repo/", ".repo/repo", "",
-				  "$outdir/head/.repo/repo",
-				  "$repos_by_name_dir/.repo/repo/repo");
+				  "$repos_by_name_dir/.repo/repo/repo", $new);
 
     $repos->{".repo/manifests/"} =
 	new Repository::Git::Head($md, ".repo/manifests/", ".repo/manifests", "",
-				  "$outdir/head/.repo/manifests",
-				  "$repos_by_name_dir/.repo/manifests/repo");
+				  "$repos_by_name_dir/.repo/manifests/repo", $new);
 
     $md->{repos} = $repos;
 
