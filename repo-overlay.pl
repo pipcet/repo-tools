@@ -159,6 +159,12 @@ sub name {
     return $r->{name};
 }
 
+sub master {
+    my ($r) = @_;
+
+    return $r->{mdata}->repo_master($r->name);
+}
+
 package Repository::Git;
 use parent -norequire, "Repository";
 
@@ -463,8 +469,8 @@ sub store_item {
     die if $item->{repopath} =~ /\/\//;
     my $repopath = $item->{repopath};
 
-    if (defined($item->{repo}) and !defined($item->{masterpath})) {
-	my $master = $mdata->repo_master($mdata->{repos}{$item->{repo}}->name);
+    if (defined($item->{r}) and !defined($item->{masterpath})) {
+	my $master = $item->{r}->master;
 	my $masterpath = $master . prefix($repopath, $item->{repo} =~ s/\/$//r);
 
 	$item->{masterpath} = $masterpath;
@@ -557,7 +563,7 @@ sub scan_repo_find_changed {
     my $newhead = $mdata->{repos}{$repo}{newhead};
 
     $dirstate->store_item($repo, { type=>"dir" });
-    if (begins_with($mdata->repo_master($mdata->{repos}{$repo}->name), "$pwd/")) {
+    if (begins_with($r->master, "$pwd/")) {
 	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
     } else {
 	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
@@ -1253,7 +1259,7 @@ for my $item ($dirstate_head->items) {
 
 	if (!$dirstate_head->changed($dir)) {
 	    if (! (-e "$outdir/head/$dir" || -l "$outdir/head/$dir")) {
-		symlink_relative($mdata_head->repo_master($r->name) . "/$gitpath", "$outdir/head/$dir") or die;
+		symlink_relative($r->master . "/$gitpath", "$outdir/head/$dir") or die;
 	    }
 	} else {
 	    mkdirp("$outdir/head/$dir");
@@ -1263,9 +1269,9 @@ for my $item ($dirstate_head->items) {
 	my $file = $gitpath;
 
 	if ($item->{changed} or $mdata_head->{repos}{$repo}->name eq "") {
-	    cat_file($mdata_head->repo_master($mdata_head->{repos}{$repo}->name, 1), $head, $file, "$outdir/head/$repo$file");
+	    cat_file($r->master, $head, $file, "$outdir/head/$repo$file");
 	} else {
-	    symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}->name) . "/$file", "$outdir/head/$repo$file") or die;
+	    symlink_relative($r->master . "/$file", "$outdir/head/$repo$file") or die;
 	}
     }
     if ($type eq "link") {
@@ -1340,7 +1346,7 @@ if ($do_wd) {
 
 	    if (!$dirstate_wd->changed($dir)) {
 		if (! (-e "$outdir/wd/$dir" || -l "$outdir/wd/$dir")) {
-		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}->name) . "/$gitpath", "$outdir/wd/$dir") or die;
+		    symlink_relative($r->master . "/$gitpath", "$outdir/wd/$dir") or die;
 		}
 	    } else {
 		mkdirp("$outdir/wd/$dir");
@@ -1352,7 +1358,7 @@ if ($do_wd) {
 	    if ($item->{changed} or $mdata_wd->{repos}{$repo}->name eq "") {
 		copy_or_hardlink("$pwd/$repo$file", "$outdir/wd/$repo$file") or die;
 	    } else {
-		symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}->name) . "/$file", "$outdir/wd/$repo$file") or die;
+		symlink_relative($r->master . "/$file", "$outdir/wd/$repo$file") or die;
 	    }
 	}
 	if ($type eq "link") {
