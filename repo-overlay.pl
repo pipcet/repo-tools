@@ -303,10 +303,6 @@ sub head {
 	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
     }
 
-    if ($repo eq ".repo/manifests/") {
-	warn "branch $branch head $head date $date";
-    }
-
     die if $head eq "";
 
     my $oldhead = $head;
@@ -319,6 +315,66 @@ sub head {
     chdir($pwd);
 
     return $head;
+}
+
+sub find_changed {
+    my ($r, $dirstate) = @_;
+    my $mdata = $dirstate->{mdata};
+    my $repo = $r->relpath;
+    my $head = $r->head;
+    my $oldhead = $r->{oldhead};
+    my $newhead = $r->{newhead};
+
+    $dirstate->store_item($repo, { type=>"dir" });
+    if (begins_with($r->master, "$pwd/")) {
+	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+    } else {
+	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+    }
+
+    if (!defined($head)) {
+	$dirstate->store_item($repo, {changed=>1});
+	$mdata->{repos}{$repo}{deleted} = 1;
+	return;
+    }
+
+    my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
+
+    for my $path (keys %diffstat) {
+	my $stat = $diffstat{$path};
+
+	if ($stat eq "M") {
+	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	} elsif ($stat eq "A") {
+	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	} elsif ($stat eq "D") {
+	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	} elsif ($stat eq "T") {
+	    $dirstate->store_item($repo.$path, {status=>" T", changed=>1});
+	} else {
+	    die "$stat $path";
+	}
+    }
+
+    if ($oldhead ne $newhead) {
+	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
+
+	for my $path (keys %diffstat) {
+	    my $stat = $diffstat{$path};
+
+	    if ($stat eq "M") {
+		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	    } elsif ($stat eq "A") {
+		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "D") {
+		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+	    } elsif ($stat eq "T") {
+		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
+	    } else {
+		die "$stat $path";
+	    }
+	}
+    }
 }
 
 sub find_siblings_and_types {
@@ -349,6 +405,34 @@ sub find_siblings_and_types {
 
 }
 
+sub create_file {
+    my ($r, $file, $dst) = @_;
+
+    cat_file($r->master, $r->head, $file, $dst);
+}
+
+sub create_link {
+    my ($r, $file, $dst) = @_;
+    my $head = $r->head;
+
+    my $dest = $r->git("cat-file" => "blob" => "$head:$file");
+    chomp($dest);
+    symlink_absolute($dest, $dst) or die;
+}
+
+sub new {
+    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
+    my $r = bless {}, $class;
+
+    $r->{mdata} = $mdata; # XXX weaken
+    $r->{relpath} = $path;
+    $r->{name} = $name;
+    $r->{url} = $url;
+    $r->{gitpath} = $gitpath;
+
+    return $r;
+}
+
 package Repository::Git::Head::New;
 use parent -norequire, "Repository::Git::Head";
 
@@ -377,6 +461,8 @@ sub gitpath {
 sub head {
     my ($r) = @_;
 
+    return $r->{head} if exists($r->{head});
+
     my $head = $r->SUPER::head;
     my $repo = $r->{relpath};
 
@@ -404,33 +490,6 @@ sub head {
     return $head;
 }
 
-sub create_file {
-    my ($r, $file, $dst) = @_;
-
-    cat_file($r->master, $r->head, $file, $dst);
-}
-
-sub create_link {
-    my ($r, $file, $dst) = @_;
-    my $head = $r->head;
-
-    my $dest = $r->git("cat-file" => "blob" => "$head:$file");
-    chomp($dest);
-    symlink_absolute($dest, $dst) or die;
-}
-
-sub new {
-    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
-    my $r = bless {}, $class;
-
-    $r->{mdata} = $mdata; # XXX weaken
-    $r->{relpath} = $path;
-    $r->{name} = $name;
-    $r->{url} = $url;
-    $r->{gitpath} = $gitpath;
-
-    return $r;
-}
 
 package Repository::Git::WD;
 use parent -norequire, "Repository::Git";
@@ -475,10 +534,6 @@ sub head {
     } else {
 	$mdata->read_versions();
 	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
-    }
-
-    if ($repo eq ".repo/manifests/") {
-	warn "branch $branch head $head date $date";
     }
 
     die if $head eq "";
@@ -534,14 +589,14 @@ sub find_siblings_and_types {
 
 sub create_file {
     my ($r, $file, $dst) = @_;
-    my $repo = $r->name;
+    my $repo = $r->relpath;
 
     copy_or_hardlink("$pwd/$repo$file", $dst) or die;
 }
 
 sub create_link {
     my ($r, $file, $dst) = @_;
-    my $repo = $r->name;
+    my $repo = $r->relpath;
 
     copy_or_hardlink("$pwd/$repo$file", $dst) or die;
 }
@@ -833,66 +888,6 @@ sub git_find_untracked {
     return @res;
 }
 
-sub scan_repo_find_changed {
-    my ($dirstate, $repo) = @_;
-    my $mdata = $dirstate->{mdata};
-    my $r = $mdata->{repos}{$repo};
-    my $head = $r->head;
-    my $oldhead = $r->{oldhead};
-    my $newhead = $r->{newhead};
-
-    $dirstate->store_item($repo, { type=>"dir" });
-    if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
-    } else {
-	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
-    }
-
-    if (!defined($head)) {
-	$dirstate->store_item($repo, {changed=>1});
-	$mdata->{repos}{$repo}{deleted} = 1;
-	return;
-    }
-
-    my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
-
-    for my $path (keys %diffstat) {
-	my $stat = $diffstat{$path};
-
-	if ($stat eq "M") {
-	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
-	} elsif ($stat eq "A") {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-	} elsif ($stat eq "D") {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-	} elsif ($stat eq "T") {
-	    $dirstate->store_item($repo.$path, {status=>" T", changed=>1});
-	} else {
-	    die "$stat $path";
-	}
-    }
-
-    if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
-
-	for my $path (keys %diffstat) {
-	    my $stat = $diffstat{$path};
-
-	    if ($stat eq "M") {
-		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
-	    } elsif ($stat eq "A") {
-		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-	    } elsif ($stat eq "D") {
-		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
-	    } elsif ($stat eq "T") {
-		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
-	    } else {
-		die "$stat $path";
-	    }
-	}
-    }
-}
-
 sub create_directory {
     my ($dirstate, $outdir) = @_;
 
@@ -908,14 +903,16 @@ sub snapshot {
     nsystem("rm -rf $outdir/.repo") unless (@repos);
     nsystem("mkdir -p $outdir") or die;
 
-    @repos ||= $dirstate->repos;
+    @repos = $dirstate->repos unless (@repos);
 
     for my $repo (@repos) {
-	$dirstate->scan_repo_find_changed($repo);
+	my $mdata = $dirstate->mdata;
+	my $r = $mdata->repositories($repo);
+	$r->find_changed($dirstate);
     }
 
     for my $repo (@repos) {
-	my $mdata = $dirstate->{mdata};
+	my $mdata = $dirstate->mdata;
 	my $r = $mdata->repositories($repo);
 	$r->find_siblings_and_types($dirstate);
     }
@@ -1034,13 +1031,6 @@ sub repository_class {
     return "Repository::Git::Head";
 }
 
-package ManifestData::Head::New;
-use parent -norequire, "ManifestData::Head";
-
-sub repository_class {
-    return "Repository::Git::Head::New";
-}
-
 sub new {
     my ($class, $version, $date) = @_;
     my $repos_by_name_dir = "$outdir/repos-by-name";
@@ -1088,6 +1078,13 @@ sub new {
 			   "$repos_by_name_dir/.repo/manifests/repo");
 
     return $mdata;
+}
+
+package ManifestData::Head::New;
+use parent -norequire, "ManifestData::Head";
+
+sub repository_class {
+    return "Repository::Git::Head::New";
 }
 
 package ManifestData::WD;
@@ -1152,12 +1149,12 @@ sub setup_repo_links {
     my $head_mdata = ManifestData::Head::New->new();
 
     system("rm -rf $outdir/repos-by-name");
-    for my $repo (values %{$head_mdata->{repos}}) {
-	my $name = $repo->{name};
+    for my $r ($head_mdata->repositories) {
+	my $name = $r->name;
 	my $linkdir = "$outdir/repos-by-name/" . $name . "/";
 
 	mkdirp($linkdir);
-	symlink_absolute("$pwd/" . $repo->{relpath}, $linkdir . "repo");
+	symlink_absolute("$pwd/" . $r->relpath, $linkdir . "repo");
     }
 
     my @other_repos = split(/\0/, `find $outdir/other-repositories -name '.git' -prune -print0`);
@@ -1349,7 +1346,7 @@ sub update_manifest {
 	nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
 	nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
 	$dirstate->store_item($repo, {changed=>1, type=>"dir"});
-	$dirstate->scan_repo_find_changed($repo);
+	$mdata->repositories($repo)->find_changed($dirstate);
     }
 
     return $new_mdata;
@@ -1480,6 +1477,9 @@ if (defined($apply) and defined($apply_repo) and
     $dirstate_head->snapshot("$outdir/head");
 }
 
+$dirstate_head_old->snapshot("$outdir/head-old") if $do_head_old;
+$dirstate_head_new->snapshot("$outdir/head-new") if $do_head_new;
+
 $do_wd &&= !(defined($apply) and defined($apply_repo) and
 	     !$do_new_symlinks and !$do_new_versions);
 
@@ -1488,6 +1488,7 @@ if ($do_wd) {
     my $dirstate_wd = new DirState($mdata_wd);
     $dirstate_wd->snapshot("$outdir/wd");
 }
+
 
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
 nsystem("ln -s $pwd $outdir/repo-overlay") or die;
