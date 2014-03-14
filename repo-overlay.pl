@@ -327,12 +327,14 @@ sub store_item {
     my $repo = $item->{repopath};
     $repo =~ s/\/*$/\//;
     while ($repo ne "./") {
-	if ($mdata->{repos}{$repo}) {
+	if (my $r = $mdata->{repos}{$repo}) {
 	    $item->{repo} = $repo;
+	    $item->{r} = $r;
 	    last;
 	}
 	$repo = dirname($repo) . "/";
     }
+    $item->{repo} = $repo = "" unless ($item->{r});
 
     die if $item->{repopath} =~ /\/\//;
     my $repopath = $item->{repopath};
@@ -359,17 +361,11 @@ sub store_item {
     my $olditem = $dirstate->{items}{$repopath};
 
     if ($olditem) {
-	my $repo = $item->{repo};
-	if (length($olditem->{repo}) > length($item->{repo})) {
-	    $repo = $olditem->{repo};
-	}
-
 	for my $key (keys %$item) {
 	    $olditem->{$key} = $item->{$key};
 	}
 	$item = $olditem;
-	$item->{repo} = $repo;
-	$item->{gitpath} = prefix($repopath . "/", $repo);
+	$item->{gitpath} = prefix($repopath . "/", $item->{repo});
 	$item->{gitpath} =~ s/\/*$//;
     } else {
 	$dirstate->{items}{$repopath} = $item;
