@@ -324,6 +324,28 @@ sub head {
     return $head;
 }
 
+sub gitpath {
+    my ($r) = @_;
+    my $gitpath = $r->{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	my $mdata = $r->mdata;
+	my $url = $r->url;
+
+	if (!($url=~/\/\//)) {
+	    # XXX why is this strange fix needed?
+	    $url = "https://github.com/" . $r->name;
+	}
+
+	warn "no repository for " . $r->name . " url $url";
+
+	#system("git clone $url $outdir/other-repositories/" . $r->name);
+	return undef;
+    }
+
+    return $gitpath;
+}
+
 sub find_changed {
     my ($r, $dirstate) = @_;
     my $mdata = $dirstate->{mdata};
@@ -443,28 +465,6 @@ sub new {
 package Repository::Git::Head::New;
 use parent -norequire, "Repository::Git::Head";
 
-sub gitpath {
-    my ($r) = @_;
-    my $gitpath = $r->{gitpath};
-
-    if ($gitpath eq "" or ! -e $gitpath) {
-	my $mdata = $r->mdata;
-	my $url = $r->url;
-
-	if (!($url=~/\/\//)) {
-	    # XXX why is this strange fix needed?
-	    $url = "https://github.com/" . $r->name;
-	}
-
-	warn "no repository for " . $r->name . " url $url";
-
-	#system("git clone $url $outdir/other-repositories/" . $r->name);
-	return undef;
-    }
-
-    return $gitpath;
-}
-
 sub head {
     my ($r) = @_;
 
@@ -501,83 +501,16 @@ sub head {
 package Repository::Git::WD;
 use parent -norequire, "Repository::Git";
 
-sub gitpath {
-    my ($r) = @_;
-    my $gitpath = $r->{gitpath};
-
-    if ($gitpath eq "" or ! -e $gitpath) {
-	my $mdata = $r->mdata;
-	my $url = $r->url;
-
-	if (!($url=~/\/\//)) {
-	    # XXX why is this strange fix needed?
-	    $url = "https://github.com/" . $r->name;
-	}
-
-	warn "no repository for " . $r->name . " url $url";
-
-	#system("git clone $url $outdir/other-repositories/" . $r->name);
-	return undef;
-    }
-
-    return $gitpath;
-}
-
-sub head {
-    my ($r) = @_;
-
-    return $r->{head} if exists($r->{head});
-
-    my $mdata = $r->mdata;
-    my $repo = $r->{relpath};
-    my $date = $mdata->{date} // "";
-
-    my $branch = $r->git(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
-    $branch = substr($branch, 0, 40);
-
-    my $head;
-    if ($do_new_versions) {
-	$head = $r->revparse($branch) // $r->revparse("HEAD");
-    } else {
-	$mdata->read_versions();
-	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
-    }
-
-    die if $head eq "";
-
-    my $oldhead = $head;
-    my $newhead = $head;
-
-    if (defined($apply) && $apply_repo eq $repo) {
-	if (grep { $_ eq $head } $r->git_parents($apply)) {
-	    $newhead = $apply;
-	    warn "successfully applied $apply to $repo";
-	    $apply_success = 1;
-	} else {
-	    warn "head $head didn't match any of " . join(", ", $r->git_parents($apply)) . " to be replaced by $apply";
-	}
-    }
-
-    $r->{oldhead} = $oldhead;
-    $r->{newhead} = $newhead;
-    $r->{head} = $head;
-
-    chdir($pwd);
-
-    return $head;
-}
-
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     my $mdata = $dirstate->{mdata};
-    my $name = $r->name;
-    my $head = $r->head;
 
     my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
+	next if $mdata->{repos}{$file . "/"};
 	if (-l "$file") {
 	    $dirstate->store_item($file, {type=>"link"});
 	} elsif (!-e "$file") {
@@ -623,76 +556,6 @@ sub new {
 
 package Repository::WD;
 use parent -norequire, "Repository";
-
-sub gitpath {
-    my ($r) = @_;
-    my $gitpath = $r->{gitpath};
-
-    if ($gitpath eq "" or ! -e $gitpath) {
-	my $mdata = $r->mdata;
-	my $url = $r->url;
-
-	if (!($url=~/\/\//)) {
-	    # XXX why is this strange fix needed?
-	    $url = "https://github.com/" . $r->name;
-	}
-
-	warn "no repository for " . $r->name . " url $url";
-
-	#system("git clone $url $outdir/other-repositories/" . $r->name);
-	return undef;
-    }
-
-    return $gitpath;
-}
-
-sub head {
-    my ($r) = @_;
-
-    return $r->{head} if exists($r->{head});
-
-    my $mdata = $r->mdata;
-    my $repo = $r->{relpath};
-    my $date = $mdata->{date} // "";
-
-    my $branch = $r->git(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
-    $branch = substr($branch, 0, 40);
-
-    my $head;
-    if ($do_new_versions) {
-	$head = $r->revparse($branch) // $r->revparse("HEAD");
-    } else {
-	$mdata->read_versions();
-	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
-    }
-
-    if ($repo eq ".repo/manifests/") {
-	warn "branch $branch head $head date $date";
-    }
-
-    die if $head eq "";
-
-    my $oldhead = $head;
-    my $newhead = $head;
-
-    if (defined($apply) && $apply_repo eq $repo) {
-	if (grep { $_ eq $head } $r->git_parents($apply)) {
-	    $newhead = $apply;
-	    warn "successfully applied $apply to $repo";
-	    $apply_success = 1;
-	} else {
-	    warn "head $head didn't match any of " . join(", ", $r->git_parents($apply)) . " to be replaced by $apply";
-	}
-    }
-
-    $r->{oldhead} = $oldhead;
-    $r->{newhead} = $newhead;
-    $r->{head} = $head;
-
-    chdir($pwd);
-
-    return $head;
-}
 
 sub find_changed {
     my ($r, $dirstate, $dir) = @_;
