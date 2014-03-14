@@ -135,6 +135,10 @@ our sub prefix {
     return $ret;
 }
 
+our sub xdirname {
+    return dirname(@_) =~ s/^\.$//r;
+}
+
 our sub mkdirp {
     my ($dir) = @_;
 
@@ -149,9 +153,9 @@ our sub symlink_relative {
     if (begins_with($src, "$pwd/", \$noprefix)) {
 	$src = "$outdir/repo-overlay/$noprefix";
     }
-    my $relsrc = abs2rel($src, dirname($dst));
+    my $relsrc = abs2rel($src, xdirname($dst));
 
-    mkdirp(dirname($dst)) or die "cannot make symlink $dst -> $relsrc";
+    mkdirp(xdirname($dst)) or die "cannot make symlink $dst -> $relsrc";
 
     symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
 }
@@ -159,7 +163,7 @@ our sub symlink_relative {
 our sub symlink_absolute {
     my ($src, $dst) = @_;
 
-    mkdirp(dirname($dst)) or die;
+    mkdirp(xdirname($dst)) or die;
 
     symlink($src, $dst) or die "cannot make symlink $dst -> $src";
 }
@@ -175,7 +179,7 @@ our sub copy_or_hardlink {
 our sub cat_file {
     my ($master, $branch, $file, $dst) = @_;
 
-    mkdirp(dirname($dst)) or die;
+    mkdirp(xdirname($dst)) or die;
 
     if ($branch ne "") {
 	nsystem("(cd $master; git cat-file blob '$branch':'$file') > $dst") or die;
@@ -370,9 +374,9 @@ sub find_changed {
 
     $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     } else {
-	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
     if (!defined($head)) {
@@ -558,9 +562,9 @@ sub find_changed {
 
     $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     } else {
-	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
     if (!defined($head)) {
@@ -739,16 +743,16 @@ sub create {
 
     return unless $r or $do_new_symlinks;
     my $repopath = $item->{repopath};
-    return unless $dirstate->changed(dirname($repopath));
+    return unless $dirstate->directory_changed($repopath);
     my $type = $item->{type};
 
     if ($type eq "dir") {
 	my $dir = $repopath;
 
-	die if $dir eq ".";
+	warn if $dir eq ".";
 	my $dirname = $dir;
 	while (!$dirstate->changed($dirname)) {
-	    ($dir, $dirname) = ($dirname, dirname($dirname));
+	    ($dir, $dirname) = ($dirname, xdirname($dirname));
 	}
 
 	if (!$dirstate->changed($dir)) {
@@ -801,8 +805,7 @@ sub items {
 sub directory_changed {
     my ($dirstate, $item) = @_;
 
-    my $dir = dirname($item);
-    $dir = "" if $dir eq ".";
+    my $dir = xdirname($item);
 
     return $dirstate->{items}{$dir} && $dirstate->{items}{$dir}{changed};
 }
@@ -830,19 +833,13 @@ sub store_item {
 
     my $repo = $item->{repopath};
     $repo =~ s/\/*$/\//;
-    while ($repo ne "./") {
+    while (1) {
 	if (my $r = $mdata->{repos}{$repo}) {
 	    $item->{repo} = $repo;
 	    $item->{r} = $r;
 	    last;
 	}
-	$repo = dirname($repo) . "/";
-    }
-
-    if ($repo eq "./") {
-	my $r = $mdata->{repos}{"/"};
-	$item->{repo} = "/";
-	$item->{r} = $r;
+	$repo = xdirname($repo) . "/";
     }
 
     $item->{repo} = $repo = undef unless ($item->{r});
@@ -886,10 +883,10 @@ sub store_item {
 
     return if $repopath eq ".";
 
-    my $dir = dirname($repopath);
+    my $dir = xdirname($repopath);
     if (!$dirstate->{items}{$dir} ||
-	$item->{changed} > $dirstate->{items}{$dir}{changed}) {
-	$dirstate->store_item(dirname($repopath), $item->{changed} ? {changed=>1, type=>"dir"} : {type=>"dir"});
+	$item->{changed} > $dirstate->changed($dir)) {
+	$dirstate->store_item($dir, $item->{changed} ? {changed=>1, type=>"dir"} : {type=>"dir"});
     }
 }
 
@@ -1120,6 +1117,8 @@ sub new {
     $mdata->new_repository(".repo/manifests/", ".repo/manifests", "",
 			   "$repos_by_name_dir/.repo/manifests/repo");
 
+    $mdata->{repos}{"/"} = new Repository::WD($mdata, $pwd);
+
     return $mdata;
 }
 
@@ -1156,7 +1155,7 @@ sub prefixes {
 
     while ($path ne ".") {
 	push @res, $path;
-	$path = dirname($path);
+	$path = xdirname($path);
     }
 
     shift @res;
@@ -1382,7 +1381,7 @@ unless ($do_new_symlinks) {
     for my $file (@files) {
 	$file =~ s/^\.\///;
 	$file =~ s/\/*$//;
-	my $absdst = rel2abs(readlink("$outdir/head/$file"), dirname("$outdir/head/$file"));
+	my $absdst = rel2abs(readlink("$outdir/head/$file"), xdirname("$outdir/head/$file"));
 	unless (begins_with($absdst, "$outdir/repo-overlay") or
 		begins_with($absdst, "$outdir/other-repositories")) {
 	    $dirstate_head->store_item($file, {changed=>1});
