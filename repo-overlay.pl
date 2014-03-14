@@ -659,7 +659,7 @@ sub create_link {
 
 sub find_changed {
     my ($r, $dirstate, $dir) = @_;
-    return if $dir eq "out" or $dir eq ".repo";
+    return if $dir eq "out" or $dir eq ".repo" or $dir eq ".git";
     my $pwd = $r->{pwd};
 
     my @files = split(/\0/, `cd $pwd; find $dir -mindepth 1 -maxdepth 1 -print0`);
@@ -679,7 +679,7 @@ sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     my $pwd = $r->{pwd};
 
-    return if $path eq "out" or $path eq ".repo";
+    return if $path eq "out" or $path eq ".repo" or $path eq ".git";
 
     my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
 
