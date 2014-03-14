@@ -147,12 +147,6 @@ sub url {
     return $r->{url};
 }
 
-sub path {
-    my ($r) = @_;
-
-    return $r->{path};
-}
-
 sub relpath {
     my ($r) = @_;
 
@@ -163,21 +157,6 @@ sub name {
     my ($r) = @_;
 
     return $r->{name};
-}
-
-sub new {
-    my ($class, $mdata, $path, $name, $url, $fullpath, $gitpath, $revision) = @_;
-    my $repo = bless {}, $class;
-
-    $repo->{mdata} = $mdata;
-    $repo->{relpath} = $path;
-    $repo->{name} = $name;
-    $repo->{url} = $url;
-    $repo->{gitpath} = $gitpath;
-    $repo->{path} = $fullpath;
-    $repo->{revision} = $revision;
-
-    return $repo;
 }
 
 package Repository::Git;
@@ -281,7 +260,7 @@ sub head {
 	    warn "head $head didn't match any of " . join(", ", $r->git_parents($apply)) . " to be replaced by $apply";
 	}
     }
-    if (!$do_emancipate) {
+    if ($r->{new} and !$do_emancipate) {
 	$head = $newhead;
     }
 
@@ -294,9 +273,22 @@ sub head {
     return $head;
 }
 
+sub new {
+    my ($class, $mdata, $path, $name, $url, $gitpath, $new) = @_;
+    my $r = bless {}, $class;
+
+    $r->{mdata} = $mdata;
+    $r->{relpath} = $path;
+    $r->{name} = $name;
+    $r->{url} = $url;
+    $r->{gitpath} = $gitpath;
+    $r->{new} = $new;
+
+    return $r;
+}
+
 package Repository::Git::WD;
 use parent -norequire, "Repository::Git";
-
 
 package DirState;
 use File::Basename qw(dirname);
