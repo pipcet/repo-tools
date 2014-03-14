@@ -571,48 +571,6 @@ sub repo_master {
     return $master;
 }
 
-sub get_gitpath {
-    my ($mdata, $repo) = @_;
-    my $gitpath = $mdata->{repos}{$repo}{gitpath};
-
-    if ($gitpath eq "" or ! -e $gitpath) {
-	my $url = $mdata->{repos}{$repo}{url};
-
-	if (!($url=~/\/\//)) {
-	    # XXX why is this strange fix needed?
-	    $url = "https://github.com/" . $mdata->{repos}{$repo}{name};
-	}
-
-	warn "no repository for " . $mdata->{repos}{$repo}{name} . " url $url";
-
-	#system("git clone $url $outdir/other-repositories/" . $mdata->{repos}{$repo}{name});
-	return undef;
-    }
-
-    return $gitpath;
-}
-
-sub get_git_repository {
-    my ($mdata, $repo) = @_;
-    my $gitpath = $mdata->{repos}{$repo}{gitpath};
-
-    if ($gitpath eq "" or ! -e $gitpath) {
-	my $url = $mdata->{repos}{$repo}{url};
-
-	if (!($url=~/\/\//)) {
-	    # XXX why is this strange fix needed?
-	    $url = "https://github.com/" . $mdata->{repos}{$repo}{name};
-	}
-
-	warn "no repository for " . $mdata->{repos}{$repo}{name} . " url $url";
-
-	#system("git clone $url $outdir/other-repositories/" . $mdata->{repos}{$repo}{name});
-	return undef;
-    }
-
-    return $gitpath;
-}
-
 sub repositories {
     my ($mdata, $pattern) = @_;
 
