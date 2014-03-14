@@ -6,8 +6,9 @@ use strict;
 use Carp::Always;
 
 my $do_just_shas;
+my $expand_sha;
 my $commit_dir;
-my $since_date = "February.28";
+my $since_date = "March.1"; # XXX
 my @repos;
 my @additional_repos;
 my @additional_dirs;
@@ -15,6 +16,7 @@ my $range;
 my $sha2log;
 GetOptions(
     "just-shas!" => \$do_just_shas,
+    "expand-sha" => \$expand_sha,
     "commit-dir=s" => \$commit_dir,
     "since=s" => \$since_date,
     "repo=s" => \@repos,
@@ -99,7 +101,7 @@ sub get {
 }
 
 sub new {
-    my ($class, $repo, $id, $name) = @_;
+    my ($class, $repo, $id, $name, $arg) = @_;
     my $h = { };
 
     #if (system("(cd '$repo'; grep -q Quarx2k .git/config)")) {
@@ -122,8 +124,8 @@ sub new {
     if (defined($sha2log)) {
 	$cmd .= " '$sha2log'";
     }
-    if (defined($since_date)) {
-	$cmd .= " --since='$since_date'";
+    if (defined($arg)) {
+	$cmd .= " $arg";
     }
 
     open($h->{fh}, "(cd '$repo'; $cmd)|") or die;
@@ -165,11 +167,17 @@ unshift @repos, (
     [".repo/manifests/", ".repo/manifests", undef]);
 push @repos, split(/,/, join(",", @additional_repos)) if (@additional_repos); #  XXX broken
 
+if (defined($expand_sha)) {
+    my $repo = $repos[0];
+
+
+}
+
 my %r;
 warn scalar(@repos) . " repos\n";
 for my $repo (@repos) {
     my ($repodir, $repoid, $reponame) = @$repo;
-    my $r =  RepoStream->new($repodir, $repoid, $reponame);
+    my $r =  RepoStream->new($repodir, $repoid, $reponame, "--since='$since_date'");
     if ($r) {
 	$r{$repodir} = $r;
     }
@@ -192,7 +200,7 @@ sub find_manifest_before {
     my ($version) = @_;
     my @versions = split(/\0/, `(cd .repo/manifests; git log --pretty=tformat:'%H' -z)`);
 
-    return $versions[0] unless $version;
+    return $versions[0] unless defined($version);
 
     chdir(".repo/manifests") or die;
 
@@ -263,14 +271,13 @@ while(1) {
 	    push @msg, "--commit-authordate='".$entry->{authordate}."'";
 	    push @msg, "--commit-committer='".$entry->{committer}."'";
 	    push @msg, "--commit-author='" . $entry->{author} . "'";
-	    push @msg, "--apply-use-manifest=" . $last_manifest if defined($last_manifest);
-
-	    print join(" ", @msg) . "\n";
-
 	    if ($repo eq ".repo/manifests/") {
 		$last_manifest = find_manifest_before($entry->{sha}) // $last_manifest;
 		warn "manifest updated to $last_manifest";
 	    }
+	    push @msg, "--apply-use-manifest=" . $last_manifest if defined($last_manifest);
+
+	    print join(" ", @msg) . "\n";
 	} else {
 	    my $repo = $dates[0][2]->{repo};
 	    my $entry = $dates[0][2]->get;
