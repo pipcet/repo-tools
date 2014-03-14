@@ -386,7 +386,7 @@ sub create_link {
     my ($r, $file, $dst) = @_;
     my $head = $r->head;
 
-    my $dest = $r->git("cat-file" => "$head:$file");
+    my $dest = $r->git("cat-file" => "blob" => "$head:$file");
     chomp($dest);
     symlink_absolute($dest, $dst) or die;
 }
