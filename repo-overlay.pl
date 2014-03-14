@@ -888,7 +888,7 @@ sub update_manifest {
     warn "rebuild tree! $apply_repo";
     my $date = `git log -1 --pretty=tformat:\%ci $apply`;
     warn "date is $date";
-    my $new_mdata = ManifestData->new($apply, $date);
+    my $new_mdata = new ManifestData($apply, $date, 1);
 
     chdir($pwd);
     chdir($repo);
@@ -956,7 +956,7 @@ if ($do_new_versions) {
     $apply_last_manifest = $v->{".repo/manifests/"};
 }
 
-my $mdata_head = new ManifestData(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
+my $mdata_head = new ManifestData($apply_last_manifest, $date, 1);
 my $dirstate_head = new DirState($mdata_head);
 
 if (defined($apply) and defined($apply_repo)) {
@@ -994,7 +994,7 @@ if (defined($apply_repo_name) and !defined($apply_repo)) {
 
     retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
 
-    $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
+    $mdata_head = new ManifestData($apply_last_manifest, $date, 1);
     $dirstate_head = new DirState($mdata_head);
 
     check_apply($mdata_head, $apply, $apply_repo);
@@ -1131,7 +1131,7 @@ $do_wd &&= !(defined($apply) and defined($apply_repo) and
 if ($do_wd) {
     nsystem("mkdir -p $outdir/wd") or die;
 
-    my $mdata_wd = ManifestData->new();
+    my $mdata_wd = new ManifestData();
     my $dirstate_wd = new DirState($mdata_wd);
 
     for my $repo ($dirstate_wd->repos) {
