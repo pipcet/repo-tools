@@ -1076,7 +1076,7 @@ for my $item ($dirstate_head->items) {
 
 	if (!$dirstate_head->changed($dir)) {
 	    if (! (-e "$outdir/head/$dir" || -l "$outdir/head/$dir")) {
-		symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$gitpath", "$outdir/head/$dir") or die;
+		symlink_relative($mdata_head->repo_master($r->name) . "/$gitpath", "$outdir/head/$dir") or die;
 	    }
 	} else {
 	    mkdirp("$outdir/head/$dir");
@@ -1141,8 +1141,9 @@ if ($do_wd) {
 
     for my $item ($dirstate_wd->items) {
 	my $repo = $item->{repo};
+	my $r = $item->{r};
 	my $head;
-	$head = $mdata_wd->head($repo) if ($repo ne "");
+	$head = $r->head if $r;
 	chdir($outdir);
 	next unless defined($head) or $do_new_symlinks;
 	my $repopath = $item->{repopath};
