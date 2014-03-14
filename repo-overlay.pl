@@ -824,59 +824,69 @@ sub check_apply {
 
     my $repo = $apply_repo;
     my $r = $mdata->{repos}{$repo};
-    chdir("$pwd");
-    if (chdir($repo)) {
-	if (!defined($r->revparse($apply))) {
-	    die "commit $apply isn't in $repo.";
-	}
-	if ($version{$repo} eq "") {
-	    warn "no version for $repo"
-	} elsif (grep { $_ eq $version{$repo} } $r->git_parents($apply)) {
-	    warn "should be able to apply commit $apply to $apply_repo.";
-	} else {
-	    my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . $r->revparse($apply . "^") . "\n";
-	    if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
-		exit(0);
-	    }
-	    if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
-		nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
-		exit(0);
-		my $d = $r->git_find_descendant("HEAD", $apply, $version{$repo});
-		$msg .= "but all will be good in the future.\n";
-		$msg .= "merge commit:\n";
 
-		$msg .= `git log -1 $d`;
+    if (!$r) {
+	retire "no repo for $repo, aborting";
 
-		die $msg;
-		exit(0);
-	    }
-	    if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
-		$msg .= "missing link for $repo\n";
-	    }
-
-	    $msg .= " repo ancestors:\n";
-	    $msg .= "".$r->revparse($version{$repo}."")."\n";
-	    $msg .= "".$r->revparse($version{$repo}."~1")."\n";
-	    $msg .= "".$r->revparse($version{$repo}."~2")."\n";
-	    $msg .= "".$r->revparse($version{$repo}."~3")."\n";
-	    $msg .= "".$r->revparse($version{$repo}."~4")."\n";
-	    $msg .= " commit ancestors:\n";
-	    $msg .= "".$r->revparse($apply."")."\n";
-	    $msg .= "".$r->revparse($apply."~1")."\n";
-	    $msg .= "".$r->revparse($apply."~2")."\n";
-	    $msg .= "".$r->revparse($apply."~3")."\n";
-	    $msg .= "".$r->revparse($apply."~4")."\n";
-
-	    $msg .= "\ngit log:\n";
-	    $msg .= `git log -1`;
-	    $msg .= "\ncommit file:\n";
-	    $msg .= `head -8 $commit_message_file`;
-
-	    $msg .= "\n\n\n";
-
-	    die($msg);
-	}
+	return;
     }
+
+    return unless chdir("$pwd") and chdir($repo);
+
+    if (!defined($r->revparse($apply))) {
+	die "commit $apply isn't in $repo.";
+    }
+
+    if ($version{$repo} eq "") {
+	warn "no version for $repo";
+	return;
+    } elsif (grep { $_ eq $version{$repo} } $r->git_parents($apply)) {
+	warn "should be able to apply commit $apply to $apply_repo.";
+	return;
+    }
+
+    if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
+	exit(0);
+    }
+
+    my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . $r->revparse($apply . "^") . "\n";
+    if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
+	nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
+	exit(0);
+	my $d = $r->git_find_descendant("HEAD", $apply, $version{$repo});
+	$msg .= "but all will be good in the future.\n";
+	$msg .= "merge commit:\n";
+
+	$msg .= `git log -1 $d`;
+
+	die $msg;
+	exit(0);
+    }
+    if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
+	$msg .= "missing link for $repo\n";
+    }
+
+    $msg .= " repo ancestors:\n";
+    $msg .= "".$r->revparse($version{$repo}."")."\n";
+    $msg .= "".$r->revparse($version{$repo}."~1")."\n";
+    $msg .= "".$r->revparse($version{$repo}."~2")."\n";
+    $msg .= "".$r->revparse($version{$repo}."~3")."\n";
+    $msg .= "".$r->revparse($version{$repo}."~4")."\n";
+    $msg .= " commit ancestors:\n";
+    $msg .= "".$r->revparse($apply."")."\n";
+    $msg .= "".$r->revparse($apply."~1")."\n";
+    $msg .= "".$r->revparse($apply."~2")."\n";
+    $msg .= "".$r->revparse($apply."~3")."\n";
+    $msg .= "".$r->revparse($apply."~4")."\n";
+
+    $msg .= "\ngit log:\n";
+    $msg .= `git log -1`;
+    $msg .= "\ncommit file:\n";
+    $msg .= `head -8 $commit_message_file`;
+
+    $msg .= "\n\n\n";
+
+    die($msg);
 }
 
 sub update_manifest {
@@ -902,31 +912,34 @@ sub update_manifest {
 	my $r0 = $mdata->repositories($repo);
 	my $r1 = $new_mdata->repositories($repo);
 
-	if ($r0->name ne $r1->name) {
-	    warn "tree rb: $repo changed from " . $r0->name . " to " . $r1->name;
-	    my $diffstat = git_inter_diff($r0, $r1);
+	my $name0 = $r0 && $r0->name;
+	my $name1 = $r1 && $r1->name;
 
-	    for my $path (keys %$diffstat) {
-		my $stat = $diffstat->{$path};
+	next if ($name0 eq $name1);
 
-		warn "$stat $path";
+	warn "tree rb: $repo changed from " . $name0 . " to " . $name1;
+	my $diffstat = git_inter_diff($r0, $r1);
 
-		if ($stat eq "M") {
-		    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
-		} elsif ($stat eq "A") {
-		    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-		} elsif ($stat eq "D") {
-		    $dirstate->store_item($repo.$path, {status=>" D", changed=>1});
-		} else {
-		    die "$stat $path";
-		}
+	for my $path (keys %$diffstat) {
+	    my $stat = $diffstat->{$path};
+
+	    warn "$stat $path";
+
+	    if ($stat eq "M") {
+		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	    } elsif ($stat eq "A") {
+		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "D") {
+		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+	    } else {
+		die "$stat $path";
 	    }
-
-	    nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-	    nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-	    $dirstate->store_item($repo, {changed=>1, type=>"dir"});
-	    $dirstate->scan_repo_find_changed($repo);
 	}
+
+	nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+	nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+	$dirstate->store_item($repo, {changed=>1, type=>"dir"});
+	$dirstate->scan_repo_find_changed($repo);
     }
 
     return $new_mdata;
