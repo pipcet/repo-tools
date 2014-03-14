@@ -20,8 +20,10 @@ my $do_commit;
 my $do_rebuild_tree;
 my $do_emancipate;
 my $do_de_emancipate;
-my $do_wd;
-my $do_head;
+my $do_wd = 1;
+my $do_head = 1;
+my $do_head_old = 1;
+my $do_head_new = 1;
 
 my $apply;
 my $apply_repo;
@@ -162,7 +164,9 @@ sub name {
 sub master {
     my ($r) = @_;
 
-    return $r->{mdata}->repo_master($r->name);
+    my $ret = $r->{mdata}->repo_master($r->name);
+
+    return $ret;
 }
 
 package Repository::Git;
@@ -325,7 +329,7 @@ sub new {
     my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
     my $r = bless {}, $class;
 
-    $r->{mdata} = $mdata;
+    $r->{mdata} = $mdata; # XXX weaken
     $r->{relpath} = $path;
     $r->{name} = $name;
     $r->{url} = $url;
@@ -572,7 +576,7 @@ sub scan_repo_find_changed {
     if (!defined($head)) {
 	$dirstate->store_item($repo, {changed=>1});
 	$mdata->{repos}{$repo}{deleted} = 1;
-	next;
+	return;
     }
 
     my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
