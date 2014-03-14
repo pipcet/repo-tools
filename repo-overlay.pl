@@ -290,22 +290,6 @@ sub git_find_descendant {
     return $head;
 }
 
-sub git {
-    my ($r, @args) = @_;
-
-    return $r->gitrepository->run(@args);
-}
-
-package Repository::Git::Head;
-use parent -norequire, "Repository::Git";
-
-use File::Basename qw(dirname);
-use File::Path qw(make_path);
-use Getopt::Long qw(:config auto_version auto_help);
-use File::PathConvert qw(abs2rel);
-use File::Copy::Recursive qw(fcopy);
-use Carp::Always;
-
 sub head {
     my ($r) = @_;
 
@@ -337,6 +321,22 @@ sub head {
 
     return $head;
 }
+
+sub git {
+    my ($r, @args) = @_;
+
+    return $r->gitrepository->run(@args);
+}
+
+package Repository::Git::Head;
+use parent -norequire, "Repository::Git";
+
+use File::Basename qw(dirname);
+use File::Path qw(make_path);
+use Getopt::Long qw(:config auto_version auto_help);
+use File::PathConvert qw(abs2rel);
+use File::Copy::Recursive qw(fcopy);
+use Carp::Always;
 
 sub gitpath {
     my ($r) = @_;
@@ -515,6 +515,13 @@ sub head {
 package Repository::Git::WD;
 use parent -norequire, "Repository::Git";
 
+use File::Basename qw(dirname);
+use File::Path qw(make_path);
+use Getopt::Long qw(:config auto_version auto_help);
+use File::PathConvert qw(abs2rel rel2abs);
+use File::Copy::Recursive qw(fcopy);
+use Carp::Always;
+
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     my $mdata = $dirstate->{mdata};
@@ -537,6 +544,66 @@ sub find_siblings_and_types {
 	    $dirstate->store_item($file, {type=>"file"});
 	} else {
 	    die;
+	}
+    }
+}
+
+sub find_changed {
+    my ($r, $dirstate) = @_;
+    my $mdata = $dirstate->{mdata};
+    my $repo = $r->relpath;
+    my $head = $r->head;
+    my $oldhead = $r->{oldhead};
+    my $newhead = $r->{newhead};
+
+    $dirstate->store_item($repo, { type=>"dir" });
+    if (begins_with($r->master, "$pwd/")) {
+	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+    } else {
+	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
+    }
+
+    if (!defined($head)) {
+	$dirstate->store_item($repo, {changed=>1});
+	$mdata->{repos}{$repo}{deleted} = 1;
+	return;
+    }
+
+    my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
+
+    for my $path (keys %diffstat) {
+	my $stat = $diffstat{$path};
+
+	if ($stat eq "M") {
+	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	} elsif ($stat eq "A") {
+	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	} elsif ($stat eq "D") {
+	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	} elsif ($stat eq "T") {
+	    $dirstate->store_item($repo.$path, {status=>" T", changed=>1});
+	} else {
+	    die "$stat $path";
+	}
+    }
+
+    if ($oldhead ne $newhead) {
+	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
+
+	for my $path (keys %diffstat) {
+	    my $stat = $diffstat{$path};
+
+	    if ($stat eq "M") {
+		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
+	    } elsif ($stat eq "A") {
+		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
+	    } elsif ($stat eq "D") {
+		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+	    } elsif ($stat eq "T") {
+		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
+	    } else {
+		die "$stat $path";
+	    }
 	}
     }
 }
@@ -573,6 +640,9 @@ use parent -norequire, "Repository";
 
 sub find_changed {
     my ($r, $dirstate, $dir) = @_;
+
+    return if $dir eq "out" or $dir eq ".repo";
+
     my @res;
     my $pwd = $r->{path};
 
@@ -595,11 +665,14 @@ sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     my $pwd = $r->{path};
 
+    return if $path eq "out" or $path eq ".repo";
+
     my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
+	next if ($dirstate->mdata->{repos}{$path . "/"});
 	if (-l "$file") {
 	    $dirstate->store_item($file, {type=>"link"});
 	} elsif (!-e "$file") {
