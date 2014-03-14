@@ -901,6 +901,31 @@ sub create_directory {
     }
 }
 
+sub snapshot {
+    my ($dirstate, $outdir, @repos) = @_;
+
+    nsystem("rm -rf $outdir/*") unless (@repos);
+    nsystem("rm -rf $outdir/.repo") unless (@repos);
+    nsystem("mkdir -p $outdir") or die;
+
+    @repos ||= $dirstate->repos;
+
+    for my $repo (@repos) {
+	$dirstate->scan_repo_find_changed($repo);
+    }
+
+    for my $repo (@repos) {
+	my $mdata = $dirstate->{mdata};
+	my $r = $mdata->repositories($repo);
+	$r->find_siblings_and_types($dirstate);
+    }
+
+    $dirstate->create_directory("$outdir");
+
+    copy_or_hardlink("$pwd/README.md", "$outdir/") or die;
+    copy_or_hardlink("$pwd/Makefile", "$outdir/") or die;
+}
+
 sub new {
     my ($class, $mdata) = @_;
 
@@ -1330,11 +1355,9 @@ sub update_manifest {
     return $new_mdata;
 }
 
-nsystem("mkdir -p $outdir/head $outdir/wd") or die;
 -d "$outdir/head/.git" or die;
 
 if ($do_new_versions) {
-    nsystem("rm -rf $outdir/versions/*");
     nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
 }
 
@@ -1354,6 +1377,12 @@ if ($do_new_versions) {
 
 my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date, 1);
 my $dirstate_head = new DirState($mdata_head);
+
+my $mdata_head_old = new ManifestData::Head($apply_last_manifest, $date, 1);
+my $dirstate_head_old = new DirState($mdata_head_old);
+
+my $mdata_head_new = new ManifestData::Head::New($apply_last_manifest, $date, 1);
+my $dirstate_head_new = new DirState($mdata_head_new);
 
 if (defined($apply) and defined($apply_repo)) {
     check_apply($mdata_head, $apply, $apply_repo);
@@ -1400,16 +1429,10 @@ if (defined($apply_repo_name) and !defined($apply_repo)) {
 
     retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
 
-    $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date, 1);
-    $dirstate_head = new DirState($mdata_head);
-
     check_apply($mdata_head, $apply, $apply_repo);
 }
 
 if ($do_new_symlinks) {
-    nsystem("rm -rf $outdir/head/*");
-    nsystem("rm -rf $outdir/head/.repo");
-    nsystem("rm -rf $outdir/wd/.repo");
 } elsif (defined($apply_repo)) {
     # rm -rf dangling-symlink/ doesn't delete anything. Learn
     # something new every day.
@@ -1452,62 +1475,18 @@ if (defined($apply) and defined($apply_repo) and
 	$dirstate_head = new DirState($mdata_head);
     }
 
-    for my $repo ($apply_repo) {
-	$mdata_head->repositories($apply_repo)->head();
-    }
-
-    for my $repo ($apply_repo) {
-	$dirstate_head->scan_repo_find_changed($repo);
-    }
-
-    for my $repo ($apply_repo) {
-	my $mdata = $dirstate_head->{mdata};
-	my $r = $mdata->repositories($apply_repo);
-	$r->find_siblings_and_types($dirstate_head);
-    }
+    $dirstate_head->snapshot("$outdir/head", $apply_repo);
 } else {
-    for my $repo ($dirstate_head->repos) {
-	$dirstate_head->scan_repo_find_changed($repo);
-    }
-
-    for my $repo ($dirstate_head->repos) {
-	my $mdata = $dirstate_head->{mdata};
-	my $r = $mdata->repositories($repo);
-	$r->find_siblings_and_types($dirstate_head);
-    }
+    $dirstate_head->snapshot("$outdir/head");
 }
-
-$dirstate_head->create_directory("$outdir/head");
-
-copy_or_hardlink("$pwd/README.md", "$outdir/head/") or die;
-copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
-
-chdir($pwd);
 
 $do_wd &&= !(defined($apply) and defined($apply_repo) and
 	     !$do_new_symlinks and !$do_new_versions);
 
 if ($do_wd) {
-    nsystem("rm -rf $outdir/wd/*");
-    nsystem("mkdir -p $outdir/wd") or die;
-
     my $mdata_wd = new ManifestData::WD();
     my $dirstate_wd = new DirState($mdata_wd);
-
-    for my $repo ($dirstate_wd->repos) {
-	$dirstate_wd->scan_repo_find_changed($repo);
-    }
-
-    for my $repo ($dirstate_wd->repos) {
-	my $mdata = $dirstate_wd->{mdata};
-	my $r = $mdata->repositories($repo);
-	$r->find_siblings_and_types($dirstate_wd);
-    }
-
-    $dirstate_wd->create_directory("$outdir/wd");
-
-    copy_or_hardlink("$pwd/README.md", "$outdir/wd/") or die;
-    copy_or_hardlink("$pwd/Makefile", "$outdir/wd/") or die;
+    $dirstate_wd->snapshot("$outdir/wd");
 }
 
 nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
