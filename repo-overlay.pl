@@ -702,14 +702,18 @@ sub repos {
     return sort keys %{$mdata->{repos}};
 }
 
+sub new_repository {
+    my ($mdata, $repopath, @args) = @_;
+
+    $mdata->{repos}{$repopath} =
+	$mdata->repository_class->new($mdata, $repopath, @args);
+}
+
 package ManifestData::Head;
 use parent -norequire, "ManifestData";
 
-sub new_repository {
-    my ($mdata, $repopath, $name, $url, $repodir) = @_;
-
-    $mdata->{repos}{$repopath} =
-	$mdata->repository_class->new($mdata, $repopath, $name, $url, $repodir);
+sub repository_class {
+    return "Repository::Git::Head";
 }
 
 package ManifestData::Head::New;
@@ -724,6 +728,7 @@ sub new {
     my $repos_by_name_dir = "$outdir/repos-by-name";
     my $mdata = bless {}, $class;
 
+    $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
 
     if (!defined($version)) {
@@ -770,12 +775,16 @@ sub new {
 package ManifestData::WD;
 use parent -norequire, "ManifestData";
 
+sub repository_class {
+    return "Repository::WD";
+}
+
 sub new {
     my ($class, $version, $date, $new) = @_;
     my $repos_by_name_dir = "$outdir/repos-by-name";
-    my $mdata = {};
-    my $repos = {};
+    my $mdata = bless {}, $class;
 
+    $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
 
     if (!defined($version)) {
@@ -806,22 +815,15 @@ sub new {
 
     for my $r (@res) {
 	my ($repopath, $name, $url, $branchref) = @$r;
-	$repos->{$repopath} =
-	    new Repository::Git::WD($mdata, $repopath, $name, $url,
-				    "$repos_by_name_dir/$name/repo", $new);
+	$mdata->new_repository($repopath, $name, $url,
+			       "$repos_by_name_dir/$name/repo");
     }
 
-    $repos->{".repo/repo/"} =
-	new Repository::Git::WD($mdata, ".repo/repo/", ".repo/repo", "",
-				"$repos_by_name_dir/.repo/repo/repo", $new);
+    $mdata->new_repository(".repo/repo/", ".repo/repo", "",
+			   "$repos_by_name_dir/.repo/repo/repo");
 
-    $repos->{".repo/manifests/"} =
-	new Repository::Git::WD($mdata, ".repo/manifests/", ".repo/manifests", "",
-				"$repos_by_name_dir/.repo/manifests/repo", $new);
-
-    $mdata->{repos} = $repos;
-
-    bless $mdata, $class;
+    $mdata->new_repository(".repo/manifests/", ".repo/manifests", "",
+			   "$repos_by_name_dir/.repo/manifests/repo");
 
     return $mdata;
 }
