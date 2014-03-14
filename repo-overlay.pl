@@ -222,6 +222,28 @@ sub git {
 package Repository::Git::Head;
 use parent -norequire, "Repository::Git";
 
+sub gitpath {
+    my ($r) = @_;
+    my $gitpath = $r->{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	my $mdata = $r->mdata;
+	my $url = $r->url;
+
+	if (!($url=~/\/\//)) {
+	    # XXX why is this strange fix needed?
+	    $url = "https://github.com/" . $r->name;
+	}
+
+	warn "no repository for " . $r->name . " url $url";
+
+	#system("git clone $url $outdir/other-repositories/" . $mdata->{repos}{$repo}{name});
+	return undef;
+    }
+
+    return $gitpath;
+}
+
 sub head {
     my ($r) = @_;
 
