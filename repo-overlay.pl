@@ -335,8 +335,6 @@ sub head {
     $r->{newhead} = $newhead;
     $r->{head} = $head;
 
-    chdir($pwd);
-
     return $head;
 }
 
@@ -1239,8 +1237,6 @@ if ($do_new_versions) {
     nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
 }
 
-chdir($pwd);
-
 if ($do_new_versions) {
     if (defined($apply_last_manifest) && !defined($date)) {
 	my $mdate = `cd '$pwd/.repo/manifests'; git log -1 --pretty=tformat:\%ci $apply_last_manifest`;
@@ -1412,8 +1408,6 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 		")") or die;
     }
 }
-
-chdir($pwd);
 
 # useful commands:
 #  repo-overlay.pl -- sync repository to wd/ head/
