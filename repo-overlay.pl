@@ -526,6 +526,7 @@ use Carp::Always;
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
+    $path //= $r->relpath;
     my $mdata = $dirstate->{mdata};
 
     my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
@@ -534,15 +535,15 @@ sub find_siblings_and_types {
 
     for my $file (@files) {
 	next if $mdata->{repos}{$file . "/"};
-	if (-l "$file") {
+	if (-l "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"link"});
-	} elsif (!-e "$file") {
+	} elsif (!-e "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"none"});
-	} elsif (-d "$file") {
+	} elsif (-d "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"dir"});
 	    $r->find_siblings_and_types($dirstate, $file)
 		if $dirstate->changed($file);
-	} elsif (-f "$file") {
+	} elsif (-f "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"file"});
 	} else {
 	    die;
@@ -642,6 +643,7 @@ use parent -norequire, "Repository";
 
 sub create_file {
     my ($r, $file, $dst) = @_;
+    my $pwd = $r->{pwd};
     my $repo = $r->relpath;
 
     copy_or_hardlink("$pwd/$repo$file", $dst) or die;
@@ -649,6 +651,7 @@ sub create_file {
 
 sub create_link {
     my ($r, $file, $dst) = @_;
+    my $pwd = $r->{pwd};
     my $repo = $r->relpath;
 
     copy_or_hardlink("$pwd/$repo$file", $dst) or die;
@@ -656,11 +659,8 @@ sub create_link {
 
 sub find_changed {
     my ($r, $dirstate, $dir) = @_;
-
     return if $dir eq "out" or $dir eq ".repo";
-
-    my @res;
-    my $pwd = $r->{path};
+    my $pwd = $r->{pwd};
 
     my @files = split(/\0/, `cd $pwd; find $dir -mindepth 1 -maxdepth 1 -print0`);
 
@@ -669,17 +669,15 @@ sub find_changed {
     for my $file (@files) {
 	next if ($dirstate->mdata->{repos}{$file . "/"});
 	$dirstate->store_item($file, {changed => 1});
-	if (-d $file) {
+	if (-d "$pwd/$file") {
 	    $r->find_changed($dirstate, $file);
 	}
     }
-
-    return @res;
 }
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
-    my $pwd = $r->{path};
+    my $pwd = $r->{pwd};
 
     return if $path eq "out" or $path eq ".repo";
 
@@ -688,16 +686,16 @@ sub find_siblings_and_types {
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
-	next if ($dirstate->mdata->{repos}{$path . "/"});
-	if (-l "$file") {
+	next if ($dirstate->mdata->{repos}{$file . "/"});
+	if (-l "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"link"});
-	} elsif (!-e "$file") {
+	} elsif (!-e "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"none"});
-	} elsif (-d "$file") {
+	} elsif (-d "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"dir"});
 	    $r->find_siblings_and_types($dirstate, $file)
 		if $dirstate->changed($file);
-	} elsif (-f "$file") {
+	} elsif (-f "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"file"});
 	} else {
 	    die;
@@ -706,11 +704,11 @@ sub find_siblings_and_types {
 }
 
 sub new {
-    my ($class, $mdata, $path) = @_;
+    my ($class, $mdata, $pwd) = @_;
     my $r = bless {}, $class;
 
     $r->{mdata} = $mdata;
-    $r->{path} = $path;
+    $r->{pwd} = $pwd;
 
     return $r;
 }
@@ -734,7 +732,6 @@ sub create {
 
     my $dirstate = $item->dirstate;
     return unless $dirstate;
-    my $mdata = $dirstate->mdata;
     my $gitpath = $item->{gitpath};
     my $repo = $item->{repo};
     my $r = $item->{r};
@@ -1128,6 +1125,8 @@ sub setup_repo_links {
     system("rm -rf $outdir/repos-by-name");
     for my $r ($head_mdata->repositories) {
 	my $name = $r->name;
+	next if $name eq "";
+
 	my $linkdir = "$outdir/repos-by-name/" . $name . "/";
 
 	mkdirp($linkdir);
@@ -1483,11 +1482,13 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
     for my $r ($mdata_head->repositories) {
 	my $repo = $r->relpath;
 	my $version_fh;
-	my $head = $r->head();
 	my $name = $r->name;
 	my $url = $r->url;
+	my $head;
 
-	my $comment = $r->git(log => "-1", "$head");
+	$head = $r->head if $r->can("head");
+	my $comment;
+	$comment = $r->git(log => "-1", "$head") if $r->can("git");
 	$comment =~ s/^/# /msg;
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
