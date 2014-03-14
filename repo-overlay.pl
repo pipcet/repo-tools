@@ -6,7 +6,7 @@ use feature 'lexical_subs';
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
-use File::PathConvert qw(abs2rel);
+use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
 
@@ -1376,7 +1376,17 @@ unless ($do_new_symlinks) {
 	$dirstate_head->store_item($file, {changed=>1});
     }
 
-    # XXX links
+    my @files = split(/\0/, `(cd '$outdir/head'; find -name .git -prune -o -type l -print0)`);
+
+    for my $file (@files) {
+	$file =~ s/^\.\///;
+	$file =~ s/\/*$//;
+	my $absdst = rel2abs(readlink("$outdir/head/$file"), dirname("$outdir/head/$file"));
+	unless (begins_with($absdst, "$outdir/repo-overlay") or
+		begins_with($absdst, "$outdir/other-repositories")) {
+	    $dirstate_head->store_item($file, {changed=>1});
+	}
+    }
 }
 
 if (defined($apply_repo_name) and !defined($apply_repo)) {
