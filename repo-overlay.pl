@@ -283,6 +283,13 @@ sub git {
 package Repository::Git::Head;
 use parent -norequire, "Repository::Git";
 
+use File::Basename qw(dirname);
+use File::Path qw(make_path);
+use Getopt::Long qw(:config auto_version auto_help);
+use File::PathConvert qw(abs2rel);
+use File::Copy::Recursive qw(fcopy);
+use Carp::Always;
+
 sub head {
     my ($r) = @_;
 
@@ -869,25 +876,6 @@ sub store_item {
     }
 }
 
-sub git_find_untracked {
-    my ($dirstate, $dir) = @_;
-    my @res;
-
-    my @files = split(/\0/, `find -mindepth 1 -maxdepth 1 -print0`);
-
-    map { s/^\.\///; } @files;
-
-    for my $file (@files) {
-	next if ($dirstate->mdata->{repos}{$file . "/"});
-	push @res, $file;
-	if (-d $file) {
-	    push @res, $dirstate->git_find_untracked($file);
-	}
-    }
-
-    return @res;
-}
-
 sub create_directory {
     my ($dirstate, $outdir) = @_;
 
@@ -918,9 +906,6 @@ sub snapshot {
     }
 
     $dirstate->create_directory("$outdir");
-
-    copy_or_hardlink("$pwd/README.md", "$outdir/") or die;
-    copy_or_hardlink("$pwd/Makefile", "$outdir/") or die;
 }
 
 sub new {
@@ -1076,6 +1061,8 @@ sub new {
 
     $mdata->new_repository(".repo/manifests/", ".repo/manifests", "",
 			   "$repos_by_name_dir/.repo/manifests/repo");
+
+    $mdata->{repos}{"/"} = new Repository::WD($mdata, $pwd);
 
     return $mdata;
 }
@@ -1303,12 +1290,9 @@ sub update_manifest {
 
     $do_rebuild_tree = 1;
     warn "rebuild tree! $apply_repo";
-    my $date = `git log -1 --pretty=tformat:\%ci $apply`;
+    my $date = `cd $pwd/$repo; git log -1 --pretty=tformat:\%ci $apply`;
     warn "date is $date";
     my $new_mdata = new ManifestData::Head::New($apply, $date, 1);
-
-    chdir($pwd);
-    chdir($repo);
 
     my %rset;
     for my $repo ($new_mdata->repos, $mdata->repos) {
@@ -1362,7 +1346,7 @@ chdir($pwd);
 
 if ($do_new_versions) {
     if (defined($apply_last_manifest) && !defined($date)) {
-	my $mdate = `(cd '$pwd/.repo/manifests'; git log -1 --pretty=tformat:\%ci $apply_last_manifest)`;
+	my $mdate = `cd '$pwd/.repo/manifests'; git log -1 --pretty=tformat:\%ci $apply_last_manifest`;
 	chomp($mdate);
 	$date = $mdate;
     }
@@ -1386,7 +1370,7 @@ if (defined($apply) and defined($apply_repo)) {
 }
 
 unless ($do_new_symlinks) {
-    my @dirs = split(/\0/, `(cd '$outdir/head'; find -name .git -prune -o -type d -print0)`);
+    my @dirs = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type d -print0`);
 
     for my $dir (@dirs) {
 	$dir =~ s/^\.\///;
@@ -1394,7 +1378,7 @@ unless ($do_new_symlinks) {
 	$dirstate_head->store_item($dir, {changed=>1});
     }
 
-    my @files = split(/\0/, `(cd '$outdir/head'; find -name .git -prune -o -type f -print0)`);
+    my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type f -print0`);
 
     for my $file (@files) {
 	$file =~ s/^\.\///;
@@ -1402,7 +1386,7 @@ unless ($do_new_symlinks) {
 	$dirstate_head->store_item($file, {changed=>1});
     }
 
-    my @files = split(/\0/, `(cd '$outdir/head'; find -name .git -prune -o -type l -print0)`);
+    my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type l -print0`);
 
     for my $file (@files) {
 	$file =~ s/^\.\///;
