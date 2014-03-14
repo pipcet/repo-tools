@@ -694,15 +694,57 @@ sub head {
     return $head;
 }
 
+sub find_changed {
+    my ($r, $dirstate, $dir) = @_;
+    my @res;
+    my $pwd = $r->{path};
+
+    my @files = split(/\0/, `cd $pwd; find $dir -mindepth 1 -maxdepth 1 -print0`);
+
+    map { s/^\.\///; } @files;
+
+    for my $file (@files) {
+	next if ($dirstate->mdata->{repos}{$file . "/"});
+	$dirstate->store_item($file, {changed => 1});
+	if (-d $file) {
+	    $r->find_changed($dirstate, $file);
+	}
+    }
+
+    return @res;
+}
+
+sub find_siblings_and_types {
+    my ($r, $dirstate, $path) = @_;
+    my $pwd = $r->{path};
+
+    my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
+
+    map { s/^\.\///; } @files;
+
+    for my $file (@files) {
+	if (-l "$file") {
+	    $dirstate->store_item($file, {type=>"link"});
+	} elsif (!-e "$file") {
+	    $dirstate->store_item($file, {type=>"none"});
+	} elsif (-d "$file") {
+	    $dirstate->store_item($file, {type=>"dir"});
+	    $r->find_siblings_and_types($dirstate, $file)
+		if $dirstate->changed($file);
+	} elsif (-f "$file") {
+	    $dirstate->store_item($file, {type=>"file"});
+	} else {
+	    die;
+	}
+    }
+}
+
 sub new {
-    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
+    my ($class, $mdata, $path) = @_;
     my $r = bless {}, $class;
 
     $r->{mdata} = $mdata;
-    $r->{relpath} = $path;
-    $r->{name} = $name;
-    $r->{url} = $url;
-    $r->{gitpath} = $gitpath;
+    $r->{path} = $path;
 
     return $r;
 }
