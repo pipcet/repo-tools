@@ -786,18 +786,6 @@ sub git_inter_diff {
     return \%diffstat;
 }
 
-sub get_base_version {
-    my ($dir, $version) = @_;
-
-    chdir($dir);
-
-    my $head = $version // oldrevparse("HEAD");
-
-    die if $head eq "";
-
-    return $head;
-}
-
 sub check_apply {
     my ($mdata, $apply, $apply_repo) = @_;
 
