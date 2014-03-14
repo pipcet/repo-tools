@@ -773,6 +773,13 @@ sub cat_file {
 sub git_inter_diff {
     my ($ra,$rb) = @_;
 
+    return {} if (!defined($ra) && !defined($rb));
+
+    if ($ra->gitpath eq $rb->gitpath) {
+    }
+
+    die unless $ra->isa("Repository::Git::Head") and $rb->isa("Repository::Git::Head");
+
     my $temp = "/home/pip/tmp"; #XXX
     nsystem("rm -rf $temp");
 
