@@ -514,6 +514,7 @@ sub find_siblings_and_types {
     my @files = split(/\0/, `cd $pwd; find $path -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
+    @files = grep { $_ ne "." } @files;
 
     for my $file (@files) {
 	if (-l "$file") {
@@ -824,6 +825,9 @@ sub git_find_untracked {
     my @res;
 
     my @files = split(/\0/, `find -maxdepth 1 -print0`);
+
+    map { s/^\.\///; } @files;
+    @files = grep { $_ ne "." } @files;
 
     for my $file (@files) {
 	next if ($dirstate->mdata->{repos}{$file . "/"});
@@ -1333,8 +1337,6 @@ sub update_manifest {
     return $new_mdata;
 }
 
-# see comment at end of file
-nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX use as lock
 nsystem("mkdir -p $outdir/head $outdir/wd") or die;
 -d "$outdir/head/.git" or die;
 
@@ -1403,7 +1405,6 @@ if (defined($apply_repo_name) and !defined($apply_repo)) {
 
 if ($do_new_symlinks) {
     nsystem("rm -rf $outdir/head/*");
-    nsystem("rm -rf $outdir/wd/*");
     nsystem("rm -rf $outdir/head/.repo");
     nsystem("rm -rf $outdir/wd/.repo");
 } elsif (defined($apply_repo)) {
@@ -1484,6 +1485,7 @@ $do_wd &&= !(defined($apply) and defined($apply_repo) and
 	     !$do_new_symlinks and !$do_new_versions);
 
 if ($do_wd) {
+    nsystem("rm -rf $outdir/wd/*");
     nsystem("mkdir -p $outdir/wd") or die;
 
     my $mdata_wd = new ManifestData::WD();
@@ -1505,8 +1507,7 @@ if ($do_wd) {
     copy_or_hardlink("$pwd/Makefile", "$outdir/wd/") or die;
 }
 
-# this must come after all symbolic links have been created, so ln
-# doesn't get confused about which relative path to use.
+nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
 nsystem("ln -s $pwd $outdir/repo-overlay") or die;
 
 if ($do_commit and defined($commit_message_file)) {
