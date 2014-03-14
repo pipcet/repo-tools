@@ -321,6 +321,34 @@ sub head {
     return $head;
 }
 
+sub find_siblings_and_types {
+    my ($r, $dirstate, $path) = @_;
+    my $mdata = $dirstate->{mdata};
+    my $repo = $r->relpath;
+    my $head = $r->head;
+
+    my @lstree_lines = $r->git("ls-tree" => "$head:$path");
+
+    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $path.(($path eq "")?"":"/").$5 } } @lstree_lines;
+
+    for my $m (@modes) {
+	my $path = $m->{path};
+
+	if ($m->{extmode} eq "120") {
+	    $dirstate->store_item($repo.$path, {type=>"link"});
+	} elsif ($m->{extmode} eq "100") {
+	    $dirstate->store_item($repo.$path, {type=>"file"});
+	} elsif ($m->{extmode} eq "040") {
+	    $dirstate->store_item($repo.$path, {type=>"dir"});
+	    $r->find_siblings_and_types($dirstate, $path)
+		if $dirstate->changed($repo.$path);
+	} else {
+	    die "unknown mode";
+	}
+    }
+
+}
+
 package Repository::Git::Head::New;
 use parent -norequire, "Repository::Git::Head";
 
@@ -477,6 +505,33 @@ sub head {
     return $head;
 }
 
+sub find_siblings_and_types {
+    my ($r, $dirstate, $path) = @_;
+    my $mdata = $dirstate->{mdata};
+    my $name = $r->name;
+    my $head = $r->head;
+
+    my @files = split(/\0/, `cd $pwd; find $path -maxdepth 1 -print0`);
+
+    map { s/^\.\///; } @files;
+
+    for my $file (@files) {
+	if (-l "$file") {
+	    $dirstate->store_item($file, {type=>"link"});
+	} elsif (!-e "$file") {
+	    $dirstate->store_item($file, {type=>"none"});
+	} elsif (-d "$file") {
+	    $dirstate->store_item($file, {type=>"dir"});
+	    $r->find_siblings_and_types($dirstate, $file)
+		if $dirstate->changed($file);
+	} elsif (-f "$file") {
+	    $dirstate->store_item($file, {type=>"file"});
+	} else {
+	    die;
+	}
+    }
+}
+
 sub create_file {
     my ($r, $file, $dst) = @_;
     my $repo = $r->name;
@@ -610,15 +665,20 @@ sub create {
     my $dirstate = $item->dirstate;
     return unless $dirstate;
     my $mdata = $dirstate->mdata;
+    my $gitpath = $item->{gitpath};
     my $repo = $item->{repo};
     my $r = $item->{r};
+    unless ($r) {
+	warn "not handling $gitpath";
+	return;
+    }
+
     my $head = $r && $r->head;
 
     return unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     return if $repopath eq "" or $repopath eq ".";
     return unless $dirstate->changed(dirname($repopath));
-    my $gitpath = $item->{gitpath};
     my $type = $item->{type};
 
     if ($type eq "dir") {
@@ -626,12 +686,13 @@ sub create {
 
 	die if $dir eq ".";
 	my $dirname = $dir;
-	while(!$dirstate->changed($dirname)) {
+	while (!$dirstate->changed($dirname)) {
 	    ($dir, $dirname) = ($dirname, dirname($dirname));
 	}
 
 	if (!$dirstate->changed($dir)) {
 	    if (! (-e "$outdir/$dir" || -l "$outdir/$dir")) {
+		# XXX is this still the right repository?
 		symlink_relative($r->master . "/$gitpath", "$outdir/$dir") or die;
 	    }
 	} else {
@@ -642,7 +703,7 @@ sub create {
     if ($type eq "file") {
 	my $file = $gitpath;
 
-	if ($item->{changed} or $mdata->{repos}{$repo}->name eq "") {
+	if ($item->{changed}) {
 	    $r->create_file($file, "$outdir/$repo$file");
 	} else {
 	    symlink_relative($r->master . "/$file", "$outdir/$repo$file") or die;
@@ -755,32 +816,6 @@ sub store_item {
     if (!$dirstate->{items}{$dir} ||
 	$item->{changed} > $dirstate->{items}{$dir}{changed}) {
 	$dirstate->store_item(dirname($repopath), $item->{changed} ? {changed=>1, type=>"dir"} : {type=>"dir"});
-    }
-}
-
-sub git_walk_tree_head {
-    my ($dirstate, $repo, $itempath, $head) = @_;
-    my $mdata = $dirstate->{mdata};
-    my $r = $mdata->{repos}{$repo};
-
-    my @lstree_lines = $r->git("ls-tree" => "$head:$itempath");
-
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $itempath.(($itempath eq "")?"":"/").$5 } } @lstree_lines;
-
-    for my $m (@modes) {
-	my $path = $m->{path};
-
-	if ($m->{extmode} eq "120") {
-	    $dirstate->store_item($repo.$path, {type=>"link"});
-	} elsif ($m->{extmode} eq "100") {
-	    $dirstate->store_item($repo.$path, {type=>"file"});
-	} elsif ($m->{extmode} eq "040") {
-	    $dirstate->store_item($repo.$path, {type=>"dir"});
-	    $dirstate->git_walk_tree_head($repo, $path, $head)
-		if $dirstate->changed($repo.$path);
-	} else {
-	    die "unknown mode";
-	}
     }
 }
 
@@ -1423,8 +1458,8 @@ if (defined($apply) and defined($apply_repo) and
 
     for my $repo ($apply_repo) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->repositories($repo)->head();
-	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
+	my $r = $mdata->repositories($apply_repo);
+	$r->find_siblings_and_types($dirstate_head);
     }
 } else {
     for my $repo ($dirstate_head->repos) {
@@ -1433,8 +1468,8 @@ if (defined($apply) and defined($apply_repo) and
 
     for my $repo ($dirstate_head->repos) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->{repos}{$repo}->head;
-	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
+	my $r = $mdata->repositories($repo);
+	$r->find_siblings_and_types($dirstate_head);
     }
 }
 
@@ -1460,22 +1495,8 @@ if ($do_wd) {
 
     for my $repo ($dirstate_wd->repos) {
 	my $mdata = $dirstate_wd->{mdata};
-	my $head = $mdata->{repos}{$repo}->head;
-	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
-    }
-
-    for my $item ($dirstate_wd->items) {
-	if (-l "$pwd/" . $item->{repopath}) {
-	    $item->{type} = "link";
-	} elsif (!-e "$pwd/" . $item->{repopath}) {
-	    $item->{type} = "none";
-	} elsif (-d "$pwd/" . $item->{repopath}) {
-	    $item->{type} = "dir";
-	} elsif (-f "$pwd/" . $item->{repopath}) {
-	    $item->{type} = "file";
-	} else {
-	    die;
-	}
+	my $r = $mdata->repositories($repo);
+	$r->find_siblings_and_types($dirstate_wd);
     }
 
     $dirstate_wd->create_directory("$outdir/wd");
