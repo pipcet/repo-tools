@@ -736,10 +736,8 @@ sub git_inter_diff {
 
     return {} if (!defined($ra) && !defined($rb));
 
-    if ($ra->gitpath eq $rb->gitpath) {
-    }
-
-    die unless $ra->isa("Repository::Git::Head") and $rb->isa("Repository::Git::Head");
+    die unless !defined($ra) or $ra->isa("Repository::Git::Head");
+    die unless !defined($rb) or $rb->isa("Repository::Git::Head");
 
     my $temp = "/home/pip/tmp"; #XXX
     nsystem("rm -rf $temp");
