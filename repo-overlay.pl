@@ -736,14 +736,9 @@ sub create {
     my $gitpath = $item->{gitpath};
     my $repo = $item->{repo};
     my $r = $item->{r};
-    unless ($r) {
-	warn "not handling $gitpath";
-	return;
-    }
 
     return unless $r or $do_new_symlinks;
     my $repopath = $item->{repopath};
-    return if $repopath eq "" or $repopath eq ".";
     return unless $dirstate->changed(dirname($repopath));
     my $type = $item->{type};
 
@@ -801,6 +796,15 @@ sub items {
     my ($dirstate) = @_;
 
     return map { $dirstate->{items}{$_}} sort keys %{$dirstate->{items}};
+}
+
+sub directory_changed {
+    my ($dirstate, $item) = @_;
+
+    my $dir = dirname($item);
+    $dir = "" if $dir eq ".";
+
+    return $dirstate->{items}{$dir} && $dirstate->{items}{$dir}{changed};
 }
 
 sub changed {
@@ -863,6 +867,7 @@ sub store_item {
     $item->{changed} = 1 if $repopath eq "";
 
     $item->{gitpath} = prefix($repopath, $item->{repo} =~ s/\/*$//r);
+    $item->{gitpath} =~ s/^\/*//;
     $item->{gitpath} =~ s/\/*$//;
 
     my $olditem = $dirstate->{items}{$repopath};
@@ -873,6 +878,7 @@ sub store_item {
 	}
 	$item = $olditem;
 	$item->{gitpath} = prefix($repopath, $item->{repo} =~ s/\/*$//r);
+	$item->{gitpath} =~ s/^\/*//;
 	$item->{gitpath} =~ s/\/*$//;
     } else {
 	$dirstate->{items}{$repopath} = bless $item, "Item";
