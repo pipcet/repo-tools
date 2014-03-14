@@ -557,15 +557,16 @@ sub create {
     my ($item, $outdir) = @_;
 
     my $dirstate = $item->dirstate;
+    return unless $dirstate;
     my $mdata = $dirstate->mdata;
     my $repo = $item->{repo};
     my $r = $item->{r};
     my $head = $r && $r->head;
 
-    next unless defined($head) or $do_new_symlinks;
+    return unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
-    next if $repopath eq "" or $repopath eq ".";
-    next unless $dirstate->changed(dirname($repopath));
+    return if $repopath eq "" or $repopath eq ".";
+    return unless $dirstate->changed(dirname($repopath));
     my $gitpath = $item->{gitpath};
     my $type = $item->{type};
 
@@ -596,6 +597,7 @@ sub create {
 	    symlink_relative($r->master . "/$file", "$outdir/$repo$file") or die;
 	}
     }
+
     if ($type eq "link") {
 	my $file = $gitpath;
 	$r->create_link($file, "$outdir/$repo$file");
@@ -615,6 +617,12 @@ use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
+
+sub mdata {
+    my ($dirstate) = @_;
+
+    return $dirstate->{mdata};
+}
 
 sub items {
     my ($dirstate) = @_;
@@ -819,7 +827,7 @@ sub new {
 
     my $dirstate = {
 	items => {
-	    "" => { changed => 1 },
+	    "" => bless({ changed => 1 }, "Item"),
 	},
 	mdata => $mdata, };
 
