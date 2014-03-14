@@ -214,10 +214,26 @@ sub name {
 
 sub master {
     my ($r) = @_;
+    my $mdata = $r->mdata;
+    my $name = $r->name;
 
-    my $ret = $r->{mdata}->repo_master($r->name);
+    return $r->{master} if exists($r->{master});
 
-    return $ret;
+    if ($name eq "") {
+	my $master = "$pwd";
+
+	return $master;
+    }
+
+    my $master = readlink("$outdir/repos-by-name/$name/repo");
+
+    $master =~ s/\/$//;
+
+    die "no master for $name" unless(defined($master));
+
+    $r->{master} = $master;
+
+    return $master;
 }
 
 package Repository::Git;
@@ -865,30 +881,6 @@ sub read_versions {
     $mdata->{version} = $version;
 
     return $version;
-}
-
-sub repo_master {
-    my ($mdata, $name) = @_;
-
-    if (exists($mdata->{repo_master_cache}{$name})) {
-	return $mdata->{repo_master_cache}{$name};
-    }
-
-    if ($name eq "") {
-	my $master = "$pwd";
-
-	return $master;
-    }
-
-    my $master = readlink("$outdir/repos-by-name/$name/repo");
-
-    $master =~ s/\/$//;
-
-    die "no master for $name" unless(defined($master));
-
-    $mdata->{repo_master_cache}{$name} = $master;
-
-    return $master;
 }
 
 sub repositories {
