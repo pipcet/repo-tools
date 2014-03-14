@@ -511,10 +511,9 @@ sub find_siblings_and_types {
     my $name = $r->name;
     my $head = $r->head;
 
-    my @files = split(/\0/, `cd $pwd; find $path -maxdepth 1 -print0`);
+    my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
-    @files = grep { $_ ne "." } @files;
 
     for my $file (@files) {
 	if (-l "$file") {
@@ -693,15 +692,12 @@ sub create {
 
 	if (!$dirstate->changed($dir)) {
 	    if (! (-e "$outdir/$dir" || -l "$outdir/$dir")) {
-		# XXX is this still the right repository?
-		symlink_relative($r->master . "/$gitpath", "$outdir/$dir") or die;
+		symlink_relative("$pwd/$dir", "$outdir/$dir") or die;
 	    }
 	} else {
 	    mkdirp("$outdir/$dir");
 	}
-    }
-
-    if ($type eq "file") {
+    } elsif ($type eq "file") {
 	my $file = $gitpath;
 
 	if ($item->{changed}) {
@@ -709,9 +705,7 @@ sub create {
 	} else {
 	    symlink_relative($r->master . "/$file", "$outdir/$repo$file") or die;
 	}
-    }
-
-    if ($type eq "link") {
+    } elsif ($type eq "link") {
 	my $file = $gitpath;
 	$r->create_link($file, "$outdir/$repo$file");
     }
@@ -824,10 +818,9 @@ sub git_find_untracked {
     my ($dirstate, $dir) = @_;
     my @res;
 
-    my @files = split(/\0/, `find -maxdepth 1 -print0`);
+    my @files = split(/\0/, `find -mindepth 1 -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
-    @files = grep { $_ ne "." } @files;
 
     for my $file (@files) {
 	next if ($dirstate->mdata->{repos}{$file . "/"});
