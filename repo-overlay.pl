@@ -432,11 +432,6 @@ sub scan_repo_find_changed {
     my $oldhead = $mdata->{repos}{$repo}{oldhead};
     my $newhead = $mdata->{repos}{$repo}{newhead};
 
-    my $gitpath = $mdata->get_gitpath($repo);
-    return unless defined($gitpath);
-
-    chdir($gitpath);
-
     $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($mdata->repo_master($mdata->{repos}{$repo}{name}), "$pwd/")) {
 	$dirstate->store_item(dirname($repo), {type=>"dir", changed=>1});
