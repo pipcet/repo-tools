@@ -1253,13 +1253,13 @@ if ($do_new_versions) {
     $apply_last_manifest = $v->{".repo/manifests/"};
 }
 
-my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date, 1);
+my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date);
 my $dirstate_head = new DirState($mdata_head);
 
-my $mdata_head_old = new ManifestData::Head($apply_last_manifest, $date, 1);
+my $mdata_head_old = new ManifestData::Head($apply_last_manifest, $date);
 my $dirstate_head_old = new DirState($mdata_head_old);
 
-my $mdata_head_new = new ManifestData::Head::New($apply_last_manifest, $date, 1);
+my $mdata_head_new = new ManifestData::Head::New($apply_last_manifest, $date);
 my $dirstate_head_new = new DirState($mdata_head_new);
 
 if (defined($apply) and defined($apply_repo)) {
@@ -1358,8 +1358,8 @@ if (defined($apply) and defined($apply_repo) and
     $dirstate_head->snapshot("$outdir/head");
 }
 
-$dirstate_head_old->snapshot("$outdir/head-old") if $do_head_old;
-$dirstate_head_new->snapshot("$outdir/head-new") if $do_head_new;
+#$dirstate_head_old->snapshot("$outdir/head-old") if $do_head_old;
+#$dirstate_head_new->snapshot("$outdir/head-new") if $do_head_new;
 
 $do_wd &&= !(defined($apply) and defined($apply_repo) and
 	     !$do_new_symlinks and !$do_new_versions);
