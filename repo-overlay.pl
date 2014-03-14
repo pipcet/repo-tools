@@ -135,6 +135,57 @@ our sub prefix {
     return $ret;
 }
 
+our sub mkdirp {
+    my ($dir) = @_;
+
+    make_path($dir);
+
+    return 1;
+}
+
+our sub symlink_relative {
+    my ($src, $dst) = @_;
+    my $noprefix;
+    if (begins_with($src, "$pwd/", \$noprefix)) {
+	$src = "$outdir/repo-overlay/$noprefix";
+    }
+    my $relsrc = abs2rel($src, dirname($dst));
+
+    mkdirp(dirname($dst)) or die "cannot make symlink $dst -> $relsrc";
+
+    symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
+}
+
+our sub symlink_absolute {
+    my ($src, $dst) = @_;
+
+    mkdirp(dirname($dst)) or die;
+
+    symlink($src, $dst) or die "cannot make symlink $dst -> $src";
+}
+
+our sub copy_or_hardlink {
+    my ($src, $dst) = @_;
+
+    fcopy($src, $dst);
+
+    return 1;
+}
+
+our sub cat_file {
+    my ($master, $branch, $file, $dst) = @_;
+
+    mkdirp(dirname($dst)) or die;
+
+    if ($branch ne "") {
+	nsystem("(cd $master; git cat-file blob '$branch':'$file') > $dst") or die;
+    } else {
+	nsystem("cat $master/$file > $dst") or die;
+    }
+
+    return 1;
+}
+
 package Repository;
 
 sub mdata {
@@ -1078,57 +1129,6 @@ sub prefixes {
 
     shift @res;
     return @res;
-}
-
-sub mkdirp {
-    my ($dir) = @_;
-
-    make_path($dir);
-
-    return 1;
-}
-
-sub symlink_relative {
-    my ($src, $dst) = @_;
-    my $noprefix;
-    if (begins_with($src, "$pwd/", \$noprefix)) {
-	$src = "$outdir/repo-overlay/$noprefix";
-    }
-    my $relsrc = abs2rel($src, dirname($dst));
-
-    mkdirp(dirname($dst)) or die "cannot make symlink $dst -> $relsrc";
-
-    symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
-}
-
-sub symlink_absolute {
-    my ($src, $dst) = @_;
-
-    mkdirp(dirname($dst)) or die;
-
-    symlink($src, $dst) or die "cannot make symlink $dst -> $src";
-}
-
-sub copy_or_hardlink {
-    my ($src, $dst) = @_;
-
-    fcopy($src, $dst);
-
-    return 1;
-}
-
-sub cat_file {
-    my ($master, $branch, $file, $dst) = @_;
-
-    mkdirp(dirname($dst)) or die;
-
-    if ($branch ne "") {
-	nsystem("(cd $master; git cat-file blob '$branch':'$file') > $dst") or die;
-    } else {
-	nsystem("cat $master/$file > $dst") or die;
-    }
-
-    return 1;
 }
 
 # like git diff, but between two repositories
