@@ -88,10 +88,12 @@ if (defined($commit_commitdate) and !$do_emancipate) {
 our sub nsystem {
     my ($cmd) = @_;
 
+#    warn "running $cmd";
+
     return !system($cmd);
 }
 
-our sub revparse {
+our sub oldrevparse {
     my ($head) = @_;
     my $last = `git rev-parse '$head' 2>/dev/null`;
     chomp($last);
@@ -103,14 +105,14 @@ our sub revparse {
     }
 }
 
-our sub git_parents {
+our sub oldgit_parents {
     my ($commit) = @_;
 
     my $i = 1;
     my $p;
     my @res;
 
-    while (defined($p = revparse("$commit^$i"))) {
+    while (defined($p = oldrevparse("$commit^$i"))) {
 	push @res, $p;
 	$i++;
     }
@@ -140,6 +142,12 @@ our sub prefix {
 }
 
 package Repository;
+
+sub mdata {
+    my ($r) = @_;
+
+    return $r->{mdata};
+}
 
 sub url {
     my ($r) = @_;
@@ -184,7 +192,7 @@ sub get_head {
 	$head = $r->revparse($branch) // $r->revparse("HEAD");
     } else {
 	$mdata->read_versions();
-	$head = $mdata->{version}{$repo} // revparse($branch) // revparse("HEAD");
+	$head = $mdata->{version}{$repo} // $r->revparse($branch) // $r->revparse("HEAD");
     }
 
     if ($repo eq ".repo/manifests/") {
@@ -197,12 +205,12 @@ sub get_head {
     my $newhead = $head;
 
     if (defined($apply) && $apply_repo eq $repo) {
-	if (grep { $_ eq $head } git_parents($apply)) {
+	if (grep { $_ eq $head } $r->git_parents($apply)) {
 	    $newhead = $apply;
 	    warn "successfully applied $apply to $repo";
 	    $apply_success = 1;
 	} else {
-	    warn "head $head didn't match any of " . join(", ", git_parents($apply)) . " to be replaced by $apply";
+	    warn "head $head didn't match any of " . join(", ", $r->git_parents($apply)) . " to be replaced by $apply";
 	}
     }
     if (!$do_emancipate) {
@@ -218,6 +226,34 @@ sub get_head {
     return $head;
 }
 
+sub revparse {
+    my ($r, $head) = @_;
+    my $last = $r->run("rev-parse" => $head, {fatal=>-128});
+    chomp($last);
+    if ($last =~ /[^0-9a-f]/ or
+	length($last) < 10) {
+	return undef;
+    } else {
+	return $last;
+    }
+}
+
+sub git_parents {
+    my ($r, $commit) = @_;
+
+    my $i = 1;
+    my $p;
+    my @res;
+
+    while (defined($p = $r->revparse("$commit^$i"))) {
+	push @res, $p;
+	$i++;
+    }
+
+    return @res;
+}
+
+
 sub run {
     my ($r, @args) = @_;
 
@@ -225,9 +261,10 @@ sub run {
 }
 
 sub new {
-    my ($class, $path, $name, $url, $fullpath, $gitpath, $revision) = @_;
+    my ($class, $mdata, $path, $name, $url, $fullpath, $gitpath, $revision) = @_;
     my $repo = bless {}, $class;
 
+    $repo->{mdata} = $mdata;
     $repo->{relpath} = $path;
     $repo->{name} = $name;
     $repo->{url} = $url;
@@ -250,6 +287,12 @@ sub items {
     my ($dirstate) = @_;
 
     return map { $dirstate->{items}{$_}} sort keys %{$dirstate->{items}};
+}
+
+sub changed {
+    my ($dirstate, $item) = @_;
+
+    return $dirstate->{items}{$item} && $dirstate->{items}{$item}{changed};
 }
 
 sub repos {
@@ -337,7 +380,7 @@ sub git_walk_tree_head {
 
     for my $m (@modes) {
 	my $path = $m->{path};
-	next unless $dirstate->{items}{dirname($repo.$path)}{changed};
+	next unless $dirstate->changed($repo.$path);
 
 	if ($m->{extmode} eq "120") {
 	    $dirstate->store_item($repo.$path, {type=>"link"});
@@ -346,7 +389,7 @@ sub git_walk_tree_head {
 	} elsif ($m->{extmode} eq "040") {
 	    $dirstate->store_item($repo.$path, {type=>"dir"});
 	    $dirstate->git_walk_tree_head($repo, $path, $head)
-		if $dirstate->{items}{$repo.$path}{changed};
+		if $dirstate->changed($repo.$path);
 	} else {
 	    die "unknown mode";
 	}
@@ -374,7 +417,7 @@ sub scan_repo_find_changed {
     my ($dirstate, $repo) = @_;
     my $mdata = $dirstate->{mdata};
     my $r = $mdata->{repos}{$repo};
-    my $head = $mdata->get_head($repo);
+    my $head = $r->get_head();
     my $oldhead = $mdata->{repos}{$repo}{oldhead};
     my $newhead = $mdata->{repos}{$repo}{newhead};
 
@@ -396,7 +439,7 @@ sub scan_repo_find_changed {
 	next;
     }
 
-    my %diffstat = reverse split(/\0/, `git diff $head --name-status -z`);
+    my %diffstat = reverse split(/\0/, `(cd '$gitpath'; git diff $head --name-status -z)`);
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
@@ -472,71 +515,18 @@ sub read_versions {
 
 	my $path;
 	my $head;
-	my $versioned_name;
-	my $versioned_url;
+	my $name;
+	my $url;
 
-	if (($path, $head, $versioned_name, $versioned_url) = /^(.*): (.*) (.*) (.*)$/) {
+	if (($path, $head, $name, $url) = /^(.*): (.*) (.*) (.*)$/) {
 	    if ($head ne "") {
 		$version->{$path} = $head;
 	    }
-	    $mdata->{repos}{$path}{versioned_name} = $versioned_name;
-	    $mdata->{repos}{$path}{versioned_url} = $versioned_url;
 	}
     }
     close $version_fh;
 
     return $mdata->{version} = $version;
-}
-
-sub get_head {
-    my ($mdata, $repo) = @_;
-
-    return $mdata->{repos}{$repo}{head} if exists($mdata->{repos}{$repo}{head});
-
-    my $date = $mdata->{date} // "";
-
-    $mdata->{repos}{$repo}{repo} = $repo;
-
-    my $gitpath = $mdata->get_gitpath($repo);
-
-    return undef unless defined($gitpath);
-    chdir($gitpath);
-
-    my $branch = `git log -1 --reverse --pretty=oneline --until='$date'|cut -c -40`;
-    chomp($branch);
-    my $head;
-    if ($do_new_versions) {
-	$head = revparse($branch) // revparse("HEAD");
-    } else {
-	$mdata->read_versions();
-	$head = $mdata->{version}{$repo} // revparse($branch) // revparse("HEAD");
-    }
-
-    die if $head eq "";
-
-    my $oldhead = $head;
-    my $newhead = $head;
-
-    if (defined($apply) && $apply_repo eq $repo) {
-	if (grep { $_ eq $head } git_parents($apply)) {
-	    $newhead = $apply;
-	    warn "successfully applied $apply to $repo";
-	    $apply_success = 1;
-	} else {
-	    warn "head $head didn't match any of " . join(", ", git_parents($apply)) . " to be replaced by $apply";
-	}
-    }
-    if (!$do_emancipate) {
-	$head = $newhead;
-    }
-
-    $mdata->{repos}{$repo}{oldhead} = $oldhead;
-    $mdata->{repos}{$repo}{newhead} = $newhead;
-    $mdata->{repos}{$repo}{head} = $head;
-
-    chdir($pwd);
-
-    return $head;
 }
 
 sub repo_master {
@@ -630,10 +620,9 @@ sub new {
 	    nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
 	}
 
-	chdir($pwd);
-	@res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
+	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url)`;
     } else {
-	@res = `python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url`;
+	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url)`;
     }
 
     map { $_ = [split(/ : /)] } @res;
@@ -642,20 +631,20 @@ sub new {
 
     for my $r (@res) {
 	my ($repopath, $name, $url, $revision) = @$r;
-	$repos->{$repopath} = new Repository($repopath, $name, $url,
+	$repos->{$repopath} = new Repository($md, $repopath, $name, $url,
 					     "$outdir/head/$repopath",
 					     "$repos_by_name_dir/$name/repo", $revision);
     }
 
     $repos->{".repo/repo/"} =
-	new Repository(".repo/repo/", ".repo/repo", "",
+	new Repository($md, ".repo/repo/", ".repo/repo", "",
 		       "$outdir/head/.repo/repo",
 		       "$repos_by_name_dir/.repo/repo/repo");
 
     $repos->{".repo/manifests/"} =
-	new Repository(".repo/manifests/", ".repo/manifests", "",
+	new Repository($md, ".repo/manifests/", ".repo/manifests", "",
 		       "$outdir/head/.repo/manifests",
-		       "$repos_by_name_dir/.repo/repo/repo");
+		       "$repos_by_name_dir/.repo/manifests/repo");
 
     $md->{repos} = $repos;
 
@@ -764,23 +753,21 @@ sub git_inter_diff {
 
     mkdir($temp);
 
-    chdir($temp);
-
-    nsystem("git init");
-    nsystem("git checkout -b empty");
-    nsystem("git commit -m empty --allow-empty");
+    nsystem("cd $temp; git init");
+    nsystem("cd $temp; git checkout -b empty");
+    nsystem("cd $temp; git commit -m empty --allow-empty");
     if ($gitpath_a ne "") {
-	nsystem("git fetch $gitpath_a $rev_a:a");
+	nsystem("cd $temp; git fetch $gitpath_a $rev_a:a");
     } else {
-	nsystem("git checkout empty; git checkout -b a");
+	nsystem("cd $temp; git checkout empty; git checkout -b a");
     }
     if ($gitpath_b ne "") {
-	nsystem("git fetch $gitpath_b $rev_b:b");
+	nsystem("cd $temp; git fetch $gitpath_b $rev_b:b");
     } else {
-	nsystem("git checkout empty; git checkout -b b");
+	nsystem("cd $temp; git checkout empty; git checkout -b b");
     }
 
-    my %diffstat = reverse split(/\0/, `git diff a b --name-status -z`);
+    my %diffstat = reverse split(/\0/, `cd $temp; git diff a b --name-status -z`);
 
     return \%diffstat;
 }
@@ -790,7 +777,7 @@ sub get_base_version {
 
     chdir($dir);
 
-    my $head = $version // revparse("HEAD");
+    my $head = $version // oldrevparse("HEAD");
 
     die if $head eq "";
 
@@ -803,7 +790,7 @@ sub git_find_descendant {
 
     my $d;
 
-    for my $p (git_parents($head)) {
+    for my $p (oldgit_parents($head)) {
 	if (nsystem("git merge-base --is-ancestor $p $a") and
 	    nsystem("git merge-base --is-ancestor $p $b")) {
 	    return git_find_descendant($p, $a, $b);
@@ -821,16 +808,18 @@ sub check_apply {
     my %version = %{$mdata->read_versions({})};
 
     my $repo = $apply_repo;
+    my $r = $mdata->{repos}{$repo};
+    chdir("$pwd");
     if (chdir($repo)) {
-	if (!defined(revparse($apply))) {
+	if (!defined($r->revparse($apply))) {
 	    die "commit $apply isn't in $repo.";
 	}
 	if ($version{$repo} eq "") {
 	    warn "no version for $repo"
-	} elsif (grep { $_ eq $version{$repo} } git_parents($apply)) {
+	} elsif (grep { $_ eq $version{$repo} } $r->git_parents($apply)) {
 	    warn "should be able to apply commit $apply to $apply_repo.";
 	} else {
-	    my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . revparse($apply . "^") . "\n";
+	    my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . $r->revparse($apply . "^") . "\n";
 	    if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
 		exit(0);
 	    }
@@ -851,17 +840,17 @@ sub check_apply {
 	    }
 
 	    $msg .= " repo ancestors:\n";
-	    $msg .= "".revparse($version{$repo}."")."\n";
-	    $msg .= "".revparse($version{$repo}."~1")."\n";
-	    $msg .= "".revparse($version{$repo}."~2")."\n";
-	    $msg .= "".revparse($version{$repo}."~3")."\n";
-	    $msg .= "".revparse($version{$repo}."~4")."\n";
+	    $msg .= "".$r->revparse($version{$repo}."")."\n";
+	    $msg .= "".$r->revparse($version{$repo}."~1")."\n";
+	    $msg .= "".$r->revparse($version{$repo}."~2")."\n";
+	    $msg .= "".$r->revparse($version{$repo}."~3")."\n";
+	    $msg .= "".$r->revparse($version{$repo}."~4")."\n";
 	    $msg .= " commit ancestors:\n";
-	    $msg .= "".revparse($apply."")."\n";
-	    $msg .= "".revparse($apply."~1")."\n";
-	    $msg .= "".revparse($apply."~2")."\n";
-	    $msg .= "".revparse($apply."~3")."\n";
-	    $msg .= "".revparse($apply."~4")."\n";
+	    $msg .= "".$r->revparse($apply."")."\n";
+	    $msg .= "".$r->revparse($apply."~1")."\n";
+	    $msg .= "".$r->revparse($apply."~2")."\n";
+	    $msg .= "".$r->revparse($apply."~3")."\n";
+	    $msg .= "".$r->revparse($apply."~4")."\n";
 
 	    $msg .= "\ngit log:\n";
 	    $msg .= `git log -1`;
@@ -941,8 +930,7 @@ chdir($pwd);
 
 if ($do_new_versions) {
     if (defined($apply_last_manifest) && !defined($date)) {
-	chdir($pwd."/.repo/manifests");
-	my $mdate = `git log -1 --pretty=tformat:\%ci $apply_last_manifest`;
+	my $mdate = `(cd '$pwd/.repo/manifests; git log -1 --pretty=tformat:\%ci $apply_last_manifest)`;
 	chomp($mdate);
 	$date = $mdate;
     }
@@ -952,7 +940,7 @@ if ($do_new_versions) {
     $apply_last_manifest = $v->{".repo/manifests/"};
 }
 
-my $mdata_head = ManifestData->new(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
+my $mdata_head = new ManifestData(get_base_version("$pwd/.repo/manifests", $apply_last_manifest), $date);
 my $dirstate_head = new DirState($mdata_head);
 
 if (defined($apply) and defined($apply_repo)) {
@@ -1044,7 +1032,7 @@ if (defined($apply) and defined($apply_repo) and
     }
 
     for my $repo ($apply_repo) {
-	$mdata_head->get_head($repo);
+	$mdata_head->{repos}{$apply_repo}->get_head();
     }
 
     for my $repo ($apply_repo) {
@@ -1053,7 +1041,7 @@ if (defined($apply) and defined($apply_repo) and
 
     for my $repo ($apply_repo) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->get_head($repo);
+	my $head = $mdata->{repos}{$repo}->get_head();
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 } else {
@@ -1063,7 +1051,7 @@ if (defined($apply) and defined($apply_repo) and
 
     for my $repo ($dirstate_head->repos) {
 	my $mdata = $dirstate_head->{mdata};
-	my $head = $mdata->get_head($repo);
+	my $head = $mdata->{repos}{$repo}->get_head();
 	$dirstate_head->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 }
@@ -1073,12 +1061,12 @@ chdir($outdir);
 for my $item ($dirstate_head->items) {
     my $repo = $item->{repo};
     my $head;
-    $head = $mdata_head->get_head($repo) if ($repo ne "");
+    $head = $mdata_head->{repos}{$repo}->get_head() if ($repo ne "");
     chdir($outdir);
     next unless defined($head) or $do_new_symlinks;
     my $repopath = $item->{repopath};
     next if $repopath eq "" or $repopath eq ".";
-    next unless $dirstate_head->{items}{dirname($repopath)}{changed};
+    next unless $dirstate_head->changed(dirname($repopath));
     my $gitpath = $item->{gitpath};
     my $type = $item->{type};
 
@@ -1087,11 +1075,11 @@ for my $item ($dirstate_head->items) {
 
 	die if $dir eq ".";
 	my $dirname = $dir;
-	while(!$dirstate_head->{items}{$dirname}{changed}) {
+	while(!$dirstate_head->changed($dirname)) {
 	    ($dir, $dirname) = ($dirname, dirname($dirname));
 	}
 
-	if (!$dirstate_head->{items}{$dir}{changed}) {
+	if (!$dirstate_head->changed($dir)) {
 	    if (! (-e "$outdir/head/$dir" || -l "$outdir/head/$dir")) {
 		symlink_relative($mdata_head->repo_master($mdata_head->{repos}{$repo}{name}) . "/$gitpath", "$outdir/head/$dir") or die;
 	    }
@@ -1121,8 +1109,8 @@ copy_or_hardlink("$pwd/Makefile", "$outdir/head/") or die;
 
 chdir($pwd);
 
-$do_wd = !(defined($apply) and defined($apply_repo) and
-	  !$do_new_symlinks and !$do_new_versions);
+$do_wd &&= !(defined($apply) and defined($apply_repo) and
+	     !$do_new_symlinks and !$do_new_versions);
 
 if ($do_wd) {
     nsystem("mkdir -p $outdir/wd") or die;
@@ -1140,16 +1128,14 @@ if ($do_wd) {
 	$dirstate_wd->git_walk_tree_head($repo, "", $head) unless $head eq "";
     }
 
-    chdir($pwd);
-
     for my $item ($dirstate_wd->items) {
-	if (-l $item->{repopath}) {
+	if (-l "$pwd/" . $item->{repopath}) {
 	    $item->{type} = "link";
-	} elsif (!-e $item->{repopath}) {
+	} elsif (!-e "$pwd/" . $item->{repopath}) {
 	    $item->{type} = "none";
-	} elsif (-d $item->{repopath}) {
+	} elsif (-d "$pwd/" . $item->{repopath}) {
 	    $item->{type} = "dir";
-	} elsif (-f $item->{repopath}) {
+	} elsif (-f "$pwd/" . $item->{repopath}) {
 	    $item->{type} = "file";
 	} else {
 	    die;
@@ -1166,7 +1152,7 @@ if ($do_wd) {
 	next unless defined($head) or $do_new_symlinks;
 	my $repopath = $item->{repopath};
 	next if $repopath eq "" or $repopath eq ".";
-	next unless $dirstate_wd->{items}{dirname($repopath)}{changed};
+	next unless $dirstate_wd->changed(dirname($repopath));
 	my $gitpath = $item->{gitpath};
 	my $type = $item->{type};
 
@@ -1175,11 +1161,11 @@ if ($do_wd) {
 
 	    die if $dir eq ".";
 	    my $dirname = $dir;
-	    while(!$dirstate_wd->{items}{$dirname}{changed}) {
+	    while(!$dirstate_wd->changed($dirname)) {
 		($dir, $dirname) = ($dirname, dirname($dirname));
 	    }
 
-	    if (!$dirstate_wd->{items}{$dir}{changed}) {
+	    if (!$dirstate_wd->changed($dir)) {
 		if (! (-e "$outdir/wd/$dir" || -l "$outdir/wd/$dir")) {
 		    symlink_relative($mdata_wd->repo_master($mdata_wd->{repos}{$repo}{name}) . "/$gitpath", "$outdir/wd/$dir") or die;
 		}
@@ -1243,10 +1229,10 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
     }
 
     if ($do_commit) {
-	chdir("$outdir/head");
-	nsystem("git add --all .; git commit -m 'versioning commit for $apply' " .
+	nsystem("(cd $outdir/head; git add --all .; git commit -m 'versioning commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
+		(defined($commit_author) ? "--author '$commit_author' " : "") .
+		")") or die;
     }
 }
 
