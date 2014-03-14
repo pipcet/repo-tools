@@ -424,6 +424,92 @@ sub new {
     return $r;
 }
 
+package Repository::WD;
+use parent -norequire, "Repository";
+
+sub gitpath {
+    my ($r) = @_;
+    my $gitpath = $r->{gitpath};
+
+    if ($gitpath eq "" or ! -e $gitpath) {
+	my $mdata = $r->mdata;
+	my $url = $r->url;
+
+	if (!($url=~/\/\//)) {
+	    # XXX why is this strange fix needed?
+	    $url = "https://github.com/" . $r->name;
+	}
+
+	warn "no repository for " . $r->name . " url $url";
+
+	#system("git clone $url $outdir/other-repositories/" . $r->name);
+	return undef;
+    }
+
+    return $gitpath;
+}
+
+sub head {
+    my ($r) = @_;
+
+    return $r->{head} if exists($r->{head});
+
+    my $mdata = $r->mdata;
+    my $repo = $r->{relpath};
+    my $date = $mdata->{date} // "";
+
+    my $branch = $r->git(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
+    $branch = substr($branch, 0, 40);
+
+    my $head;
+    if ($do_new_versions) {
+	$head = $r->revparse($branch) // $r->revparse("HEAD");
+    } else {
+	$mdata->read_versions();
+	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
+    }
+
+    if ($repo eq ".repo/manifests/") {
+	warn "branch $branch head $head date $date";
+    }
+
+    die if $head eq "";
+
+    my $oldhead = $head;
+    my $newhead = $head;
+
+    if (defined($apply) && $apply_repo eq $repo) {
+	if (grep { $_ eq $head } $r->git_parents($apply)) {
+	    $newhead = $apply;
+	    warn "successfully applied $apply to $repo";
+	    $apply_success = 1;
+	} else {
+	    warn "head $head didn't match any of " . join(", ", $r->git_parents($apply)) . " to be replaced by $apply";
+	}
+    }
+
+    $r->{oldhead} = $oldhead;
+    $r->{newhead} = $newhead;
+    $r->{head} = $head;
+
+    chdir($pwd);
+
+    return $head;
+}
+
+sub new {
+    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
+    my $r = bless {}, $class;
+
+    $r->{mdata} = $mdata;
+    $r->{relpath} = $path;
+    $r->{name} = $name;
+    $r->{url} = $url;
+    $r->{gitpath} = $gitpath;
+
+    return $r;
+}
+
 package DirState;
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
@@ -786,7 +872,7 @@ package ManifestData::WD;
 use parent -norequire, "ManifestData";
 
 sub repository_class {
-    return "Repository::WD";
+    return "Repository::Git::WD";
 }
 
 sub new {
