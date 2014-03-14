@@ -693,6 +693,7 @@ sub store_item {
     return if $repopath eq ".";
 
     my $dir = dirname($repopath);
+    store_item($dirstate, $dir, {});
     if (!$dirstate->{items}{$dir} ||
 	$item->{changed} > $dirstate->{items}{$dir}{changed}) {
 	$dirstate->store_item(dirname($repopath), $item->{changed} ? {changed=>1, type=>"dir"} : {type=>"dir"});
@@ -809,7 +810,6 @@ sub create_directory {
     for my $item ($dirstate->items) {
 	$item->create($outdir);
     }
-
 }
 
 sub new {
