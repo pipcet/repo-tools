@@ -835,14 +835,13 @@ sub repos {
 }
 
 sub store_item {
-    my ($dirstate, $path, $item) = @_;
+    my ($dirstate, $repopath, $item) = @_;
     my $mdata = $dirstate->{mdata};
-    $item->{repopath} = $path;
-    $item->{repopath} =~ s/\/*$//;
+    $repopath =~ s/\/*$//;
 
     $item->{dirstate} = $dirstate; # XXX weaken
 
-    my $repo = $item->{repopath};
+    my $repo = $repopath;
     $repo =~ s/\/*$/\//;
     while (1) {
 	if (my $r = $mdata->{repos}{$repo}) {
@@ -878,21 +877,15 @@ sub store_item {
     $item->{gitpath} =~ s/^\/*//;
     $item->{gitpath} =~ s/\/*$//;
 
-    my $olditem = $dirstate->{items}{$repopath};
+    $item->{repopath} = $repopath;
 
-    if ($olditem) {
-	for my $key (keys %$item) {
-	    $olditem->{$key} = $item->{$key};
-	}
-	$item = $olditem;
-	$item->{gitpath} = prefix($repopath, $item->{repo} =~ s/\/*$//r);
-	$item->{gitpath} =~ s/^\/*//;
-	$item->{gitpath} =~ s/\/*$//;
-    } else {
-	$dirstate->{items}{$repopath} = bless $item, "Item";
+    my $olditem = ($dirstate->{items}{$repopath} //= bless {}, "Item");
+
+    for my $key (keys %$item) {
+	$olditem->{$key} = $item->{$key};
     }
 
-    return if $repopath eq ".";
+    return if $repopath eq "";
 
     my $dir = xdirname($repopath);
     if (!$dirstate->{items}{$dir} ||
