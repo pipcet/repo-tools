@@ -100,18 +100,6 @@ our sub nsystem {
     return !system($cmd);
 }
 
-our sub oldrevparse {
-    my ($head) = @_;
-    my $last = `git rev-parse '$head' 2>/dev/null`;
-    chomp($last);
-    if ($last =~ /[^0-9a-f]/ or
-	length($last) < 10) {
-	return undef;
-    } else {
-	return $last;
-    }
-}
-
 our sub begins_with {
     my ($a,$b,$noprefix) = @_;
 
