@@ -937,11 +937,12 @@ use Carp::Always;
 sub read_version {
     my ($mdata, $repo) = @_;
 
-    return $mdata->{version}{$repo} if $mdata->{version} and $mdata->{version}{$repo};
+    return $mdata->{version}{$repo} if $mdata->{version} and defined($mdata->{version}{$repo});
 
     my $version = { };
     my $version_fh;
 
+    # XXX
     open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/'$repo' -name version.txt`|";
     while (<$version_fh>) {
 	chomp;
@@ -970,6 +971,7 @@ sub read_versions {
     my $version = { };
     my $version_fh;
 
+    # XXX
     open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/ -name version.txt`|";
     while (<$version_fh>) {
 	chomp;
@@ -1253,15 +1255,20 @@ sub check_apply {
     }
 
     if ($r->gitp("merge-base" => "--is-ancestor", $apply, $r->version)) {
-	exit(0);
+	retire "already applied $apply";
     }
 
     my $msg = "cannot apply commit $apply to $repo @" . $r->version . " != " . $r->revparse($apply . "^") . "\n";
     if ($r->gitp("merge-base" => "--is-ancestor", $r->version, $apply)) {
 	my $d = $r->git_find_missing_link($r->version, $apply);
-	$msg .= "missing link for $repo:\n";
+	if ($d) {
+	    $msg .= "missing link for $repo:\n";
 
-	$msg .= `cd $pwd/$repo; git log -1 $d`;
+	    $msg .= `cd $pwd/$repo; git log -1 $d`;
+	} else {
+	    $msg .= "cannot find missing link\n";
+
+	}
     }
     if ($r->gitp("merge-base" => "--is-ancestor", $apply, "HEAD") &&
 	$r->gitp("merge-base" => "--is-ancestor", $r->version, "HEAD")) {
@@ -1368,9 +1375,9 @@ if ($do_new_versions) {
 	$apply_last_manifest = $mm;
     }
 } else {
-    my $v = ManifestData::read_versions({});
+    my $v = ManifestData::read_version({}, ".repo/manifests/");
 
-    $apply_last_manifest = $v->{".repo/manifests/"};
+    $apply_last_manifest = $v;
 }
 
 my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date);
