@@ -10,7 +10,7 @@ use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
 
-use Git::Repository;
+use Git::Wrapper;
 
 my $do_new_versions;
 my $do_new_symlinks;
@@ -241,6 +241,20 @@ sub gitpath {
     return $gitpath;
 }
 
+sub git {
+    my ($r) = @_;
+
+    return $r->gitwrapper;
+}
+
+sub gitwrapper {
+    my ($r) = @_;
+
+    return $r->{gitwrapper} if ($r->{gitwrapper});
+
+    return $r->{gitwrapper} = new Git::Wrapper($r->{gitpath});
+}
+
 sub gitrepository {
     my ($r) = @_;
 
@@ -257,8 +271,7 @@ sub version {
 
 sub revparse {
     my ($r, $head) = @_;
-    my $last = $r->git("rev-parse" => $head, {fatal=>-128, quiet=>1});
-    chomp($last);
+    my $last = $r->git->rev_parse($head);
     if ($last =~ /[^0-9a-f]/ or
 	length($last) < 10) {
 	return undef;
@@ -290,8 +303,8 @@ sub git_find_descendant {
 
     for my $p ($r->git_parents($head)) {
 	# XXX test this
-	if ($r->git("merge-base" => "--is-ancestor", "$p", "$a") and
-	    $r->git("merge-base" => "--is-ancestor", "$p", "$b")) {
+	if ($r->git->merge_base("--is-ancestor", "$p", "$a") and
+	    $r->git->merge_base("--is-ancestor", "$p", "$b")) {
 	    return $r->git_find_descendant($p, $a, $b);
 	}
     }
@@ -321,7 +334,7 @@ sub head {
     my $repo = $r->{relpath};
     my $date = $r->{date} // "";
 
-    my $branch = $r->git(log => "-1", "--first-parent", "--reverse", "--pretty=oneline", "--until=$date");
+    my $branch = $r->git->RUN(log => "1", "--first-parent", "--reverse", "--pretty=oneline", "--until=$date");
     $branch = substr($branch, 0, 40);
 
     my $head;
@@ -341,20 +354,6 @@ sub head {
     $r->{head} = $head;
 
     return $head;
-}
-
-sub git {
-    my ($r, @args) = @_;
-
-    return $r->gitrepository->run(@args);
-}
-
-sub gitp {
-    my ($r, @args) = @_;
-
-    $r->gitrepository->run(@args);
-
-    return !($?>>8);
 }
 
 sub new {
@@ -401,7 +400,7 @@ sub find_changed {
 	return;
     }
 
-    my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
+    my %diffstat = reverse split(/\0/, $r->git->diff("$head", "--name-status", "-z"));
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
@@ -420,7 +419,7 @@ sub find_changed {
     }
 
     if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
+	my %diffstat = reverse split(/\0/, $r->git->diff("$oldhead..$newhead", "--name-status", "-z"));
 
 	for my $path (keys %diffstat) {
 	    my $stat = $diffstat{$path};
@@ -445,7 +444,7 @@ sub find_siblings_and_types {
     my $repo = $r->relpath;
     my $head = $r->head;
 
-    my @lstree_lines = $r->git("ls-tree" => "$head:$path");
+    my @lstree_lines = $r->git->ls_tree("$head:$path");
 
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $path.(($path eq "")?"":"/").$5 } } @lstree_lines;
 
@@ -477,7 +476,7 @@ sub create_link {
     my ($r, $file, $dst) = @_;
     my $head = $r->head;
 
-    my $dest = $r->git("cat-file" => "blob" => "$head:$file");
+    my $dest = $r->git->cat_file("blob" => "$head:$file");
     chomp($dest);
     symlink_absolute($dest, $dst) or die;
 }
@@ -576,7 +575,7 @@ sub find_changed {
 	return;
     }
 
-    my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
+    my %diffstat = reverse split(/\0/, $r->git->diff("$head", "--name-status", "-z"));
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
@@ -595,7 +594,7 @@ sub find_changed {
     }
 
     if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
+	my %diffstat = reverse split(/\0/, $r->git->diff("$oldhead..$newhead", "--name-status", "-z"));
 
 	for my $path (keys %diffstat) {
 	    my $stat = $diffstat{$path};
@@ -1254,12 +1253,12 @@ sub check_apply {
 	return;
     }
 
-    if ($r->gitp("merge-base" => "--is-ancestor", $apply, $r->version)) {
+    if ($r->git->merge_base("--is-ancestor", $apply, $r->version)) {
 	retire "already applied $apply";
     }
 
     my $msg = "cannot apply commit $apply to $repo @" . $r->version . " != " . $r->revparse($apply . "^") . "\n";
-    if ($r->gitp("merge-base" => "--is-ancestor", $r->version, $apply)) {
+    if ($r->git->merge_base("--is-ancestor", $r->version, $apply)) {
 	my $d = $r->git_find_missing_link($r->version, $apply);
 	if ($d) {
 	    $msg .= "missing link for $repo:\n";
@@ -1270,8 +1269,8 @@ sub check_apply {
 
 	}
     }
-    if ($r->gitp("merge-base" => "--is-ancestor", $apply, "HEAD") &&
-	$r->gitp("merge-base" => "--is-ancestor", $r->version, "HEAD")) {
+    if ($r->git->merge-base("--is-ancestor", $apply, "HEAD") &&
+	$r->git->merge-base("--is-ancestor", $r->version, "HEAD")) {
 	my $d = $r->git_find_descendant("HEAD", $apply, $r->version);
 	$msg .= "but all will be good in the future.\n";
 	$msg .= "merge commit:\n";
@@ -1524,7 +1523,7 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 
 	$head = $r->head if $r->can("head");
 	my $comment;
-	$comment = $r->git(log => "-1", "$head") if $r->can("git");
+	$comment = $r->git->log("-1", "$head") if $r->can("git");
 	$comment =~ s/^/# /msg;
 
 	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
