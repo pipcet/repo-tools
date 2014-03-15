@@ -1233,15 +1233,11 @@ sub check_apply {
 
     die if $apply eq "";
 
-    my %version = %{$mdata->read_versions};
-
     my $repo = $apply_repo;
     my $r = $mdata->{repos}{$repo};
 
     if (!$r) {
 	retire "no repo for $repo, aborting";
-
-	return;
     }
 
     if (!defined($r->revparse($apply))) {
