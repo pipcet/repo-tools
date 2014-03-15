@@ -246,7 +246,9 @@ sub gitrepository {
 
     return $r->{gitrepository} if ($r->{gitrepository});
 
-    return $r->{gitrepository} = new Git::Repository(work_tree => $r->{gitpath});
+    return $r->{gitrepository} =
+	new Git::Repository(work_tree => $r->{gitpath},
+			    git_dir => $r->{gitpath} . "/.git");
 }
 
 sub version {
@@ -257,7 +259,7 @@ sub version {
 
 sub revparse {
     my ($r, $head) = @_;
-    my $last = $r->git("rev-parse" => $head, {fatal=>-128, quiet=>1});
+    my $last = $r->git("rev-parse" => $head);
     chomp($last);
     if ($last =~ /[^0-9a-f]/ or
 	length($last) < 10) {
@@ -290,8 +292,8 @@ sub git_find_descendant {
 
     for my $p ($r->git_parents($head)) {
 	# XXX test this
-	if ($r->git("merge-base" => "--is-ancestor", "$p", "$a") and
-	    $r->git("merge-base" => "--is-ancestor", "$p", "$b")) {
+	if ($r->git_ancestor($p, $a) and
+	    $r->git_ancestor($p, $b)) {
 	    return $r->git_find_descendant($p, $a, $b);
 	}
     }
@@ -346,15 +348,36 @@ sub head {
 sub git {
     my ($r, @args) = @_;
 
-    return $r->gitrepository->run(@args);
+    die if grep { /\'/ } @args;
+
+    my $path = $r->gitpath;
+    my $cmd = "cd '$path'; git " . join(" ", map { "'$_'" } @args);
+
+    my $output = `$cmd`;
+
+    chomp($output);
+
+    return $output;
 }
 
 sub gitp {
     my ($r, @args) = @_;
 
-    $r->gitrepository->run(@args);
+    $r->git(@args);
 
     return !($?>>8);
+}
+
+sub gitz {
+    my ($r, @args) = @_;
+
+    return split(/\0/, $r->git(@args, "-z"));
+}
+
+sub git_ancestor {
+    my ($r, $a, $b) = @_;
+
+    return $r->gitp("merge-base", "--is-ancestor", $a, $b);
 }
 
 sub new {
@@ -401,7 +424,7 @@ sub find_changed {
 	return;
     }
 
-    my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
+    my %diffstat = reverse $r->gitz(diff => "$head", "--name-status");
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
@@ -420,7 +443,7 @@ sub find_changed {
     }
 
     if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
+	my %diffstat = reverse $r->gitz(diff => "$oldhead..$newhead", "--name-status");
 
 	for my $path (keys %diffstat) {
 	    my $stat = $diffstat{$path};
@@ -445,7 +468,7 @@ sub find_siblings_and_types {
     my $repo = $r->relpath;
     my $head = $r->head;
 
-    my @lstree_lines = $r->git("ls-tree" => "$head:$path");
+    my @lstree_lines = $r->gitz("ls-tree" => "$head:$path");
 
     my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $path.(($path eq "")?"":"/").$5 } } @lstree_lines;
 
@@ -576,7 +599,7 @@ sub find_changed {
 	return;
     }
 
-    my %diffstat = reverse split(/\0/, $r->git(diff => "$head", "--name-status", "-z"));
+    my %diffstat = reverse $r->gitz(diff => "$head", "--name-status");
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
@@ -595,7 +618,7 @@ sub find_changed {
     }
 
     if ($oldhead ne $newhead) {
-	my %diffstat = reverse split(/\0/, $r->git(diff => "$oldhead..$newhead", "--name-status", "-z"));
+	my %diffstat = reverse $r->gitz(diff => "$oldhead..$newhead", "--name-status");
 
 	for my $path (keys %diffstat) {
 	    my $stat = $diffstat{$path};
@@ -1254,12 +1277,12 @@ sub check_apply {
 	return;
     }
 
-    if ($r->gitp("merge-base" => "--is-ancestor", $apply, $r->version)) {
+    if ($r->git_ancestor($apply, $r->version)) {
 	retire "already applied $apply";
     }
 
     my $msg = "cannot apply commit $apply to $repo @" . $r->version . " != " . $r->revparse($apply . "^") . "\n";
-    if ($r->gitp("merge-base" => "--is-ancestor", $r->version, $apply)) {
+    if ($r->git_ancestor($r->version, $apply)) {
 	my $d = $r->git_find_missing_link($r->version, $apply);
 	if ($d) {
 	    $msg .= "missing link for $repo:\n";
@@ -1270,8 +1293,8 @@ sub check_apply {
 
 	}
     }
-    if ($r->gitp("merge-base" => "--is-ancestor", $apply, "HEAD") &&
-	$r->gitp("merge-base" => "--is-ancestor", $r->version, "HEAD")) {
+    if ($r->git_ancestor($apply, "HEAD") &&
+	$r->git_ancestor($r->version, "HEAD")) {
 	my $d = $r->git_find_descendant("HEAD", $apply, $r->version);
 	$msg .= "but all will be good in the future.\n";
 	$msg .= "merge commit:\n";
