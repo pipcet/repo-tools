@@ -854,8 +854,7 @@ sub store_item {
 
     $item->{repo} = $repo = undef unless ($item->{r});
 
-    die if $item->{repopath} =~ /\/\//;
-    my $repopath = $item->{repopath};
+    die if $repopath =~ /\/\//;
 
     if (defined($item->{r}) and !defined($item->{masterpath})) {
 	my $master = $item->{r}->master;
