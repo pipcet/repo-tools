@@ -311,6 +311,20 @@ sub git_find_descendant {
     return $head;
 }
 
+sub git_find_missing_link {
+    my ($r, $a, $b) = @_;
+
+    my $d;
+
+    for my $p ($r->git_parents($b)) {
+	if (grep { $_ eq $a } $r->git_parents($p)) {
+	    return $p;
+	}
+    }
+
+    return undef;
+}
+
 sub head {
     my ($r) = @_;
 
@@ -1203,7 +1217,7 @@ sub check_apply {
 
     die if $apply eq "";
 
-    my %version = %{$mdata->read_versions({})};
+    my %version = %{$mdata->read_versions};
 
     my $repo = $apply_repo;
     my $r = $mdata->{repos}{$repo};
@@ -1213,8 +1227,6 @@ sub check_apply {
 
 	return;
     }
-
-    return unless chdir("$pwd") and chdir($repo);
 
     if (!defined($r->revparse($apply))) {
 	die "commit $apply isn't in $repo.";
@@ -1228,25 +1240,26 @@ sub check_apply {
 	return;
     }
 
-    if (nsystem("git merge-base --is-ancestor $apply $version{$repo}")) {
+    if ($r->gitp("merge-base" => "--is-ancestor", $apply, $version{$repo})) {
 	exit(0);
     }
 
     my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . $r->revparse($apply . "^") . "\n";
-    if (nsystem("git merge-base --is-ancestor $apply HEAD") &&
-	nsystem("git merge-base --is-ancestor $version{$repo} HEAD")) {
-	exit(0);
+    if ($r->gitp("merge-base" => "--is-ancestor", $version{$repo}, $apply)) {
+	my $d = $r->git_find_missing_link($version{$repo}, $apply);
+	$msg .= "missing link for $repo:\n";
+
+	$msg .= `cd $pwd/$repo; git log -1 $d`;
+    }
+    if ($r->gitp("merge-base" => "--is-ancestor", $apply, "HEAD") &&
+	$r->gitp("merge-base" => "--is-ancestor", $version{$repo}, "HEAD")) {
 	my $d = $r->git_find_descendant("HEAD", $apply, $version{$repo});
 	$msg .= "but all will be good in the future.\n";
 	$msg .= "merge commit:\n";
 
-	$msg .= `git log -1 $d`;
+	$msg .= `cd $pwd/$repo; git log -1 $d`;
 
-	die $msg;
-	exit(0);
-    }
-    if (nsystem("git merge-base --is-ancestor $version{$repo} $apply")) {
-	$msg .= "missing link for $repo\n";
+	retire $msg;
     }
 
     $msg .= " repo ancestors:\n";
@@ -1263,7 +1276,7 @@ sub check_apply {
     $msg .= "".$r->revparse($apply."~4")."\n";
 
     $msg .= "\ngit log:\n";
-    $msg .= `git log -1`;
+    $msg .= `cd $pwd/$repo; git log -1`;
     $msg .= "\ncommit file:\n";
     $msg .= `head -8 $commit_message_file`;
 
@@ -1470,7 +1483,6 @@ nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
 nsystem("ln -s $pwd $outdir/repo-overlay") or die;
 
 if ($do_commit and defined($commit_message_file)) {
-    chdir("$outdir/head");
     if ($do_emancipate) {
 	nsystem("cd $outdir/head; git add --all .; git commit -m 'emancipation commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
@@ -1522,7 +1534,7 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 
 # perl ~/repo-tools/repo-log.pl --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do echo "$REPLY"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay"; done
 
-# perl ~/repo-tools/repo-log.pl --additional-dir=~/tmp-repo-overlay/other-repositories/ --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay" && sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay" || break; done
+# perl ~/repo-tools/repo-log.pl --additional-dir=/home/pip/tmp-repo-overlay/other-repositories --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay" && sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay" || break; done
 
 exit(0);
 
