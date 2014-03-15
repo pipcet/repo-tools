@@ -725,17 +725,9 @@ use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
 
-sub dirstate {
-    my ($item) = @_;
-
-    return $item->{dirstate};
-}
-
 sub create {
-    my ($item, $outdir) = @_;
+    my ($item, $dirstate, $outdir) = @_;
 
-    my $dirstate = $item->dirstate;
-    return unless $dirstate;
     my $gitpath = $item->{gitpath};
     my $repo = $item->{repo};
     my $r = $item->{r};
@@ -827,8 +819,6 @@ sub store_item {
     my $mdata = $dirstate->{mdata};
     $repopath =~ s/\/*$//;
 
-    $item->{dirstate} = $dirstate; # XXX weaken
-
     my $repo = $repopath;
     $repo =~ s/\/*$/\//;
     while (1) {
@@ -885,7 +875,7 @@ sub create_directory {
     my ($dirstate, $outdir) = @_;
 
     for my $item ($dirstate->items) {
-	$item->create($outdir);
+	$item->create($dirstate, $outdir);
     }
 }
 
