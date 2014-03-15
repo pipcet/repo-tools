@@ -119,7 +119,7 @@ sub new {
     } else {
 	$tformat = "* $repo %h by %an at %ci%n..CommitDate:%ci%n..SHA:%H%n..%N%n..%s%n%w(0,6,9)%b%n%w(0,0,0)";
     }
-    my $cmd = "git log -p --sparse --full-history --pretty=tformat:'$tformat' --date=iso $range";
+    my $cmd = "git log -p --first-parent --pretty=tformat:'$tformat' --date=iso $range";
 
     if (defined($sha2log)) {
 	$cmd .= " '$sha2log'";
