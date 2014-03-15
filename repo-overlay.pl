@@ -261,6 +261,12 @@ sub gitrepository {
     return $r->{gitrepository} = new Git::Repository(work_tree => $r->{gitpath});
 }
 
+sub version {
+    my ($r) = @_;
+
+    return $r->{version};
+}
+
 sub revparse {
     my ($r, $head) = @_;
     my $last = $r->git("rev-parse" => $head, {fatal=>-128, quiet=>1});
@@ -339,6 +345,28 @@ sub git {
     my ($r, @args) = @_;
 
     return $r->gitrepository->run(@args);
+}
+
+sub gitp {
+    my ($r, @args) = @_;
+
+    $r->gitrepository->run(@args);
+
+    return !($?>>8);
+}
+
+sub new {
+    my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
+    my $r = bless {}, $class;
+
+    $r->{relpath} = $path;
+    $r->{name} = $name;
+    $r->{url} = $url;
+    $r->{gitpath} = $gitpath;
+    $r->{date} = $date;
+    $r->{version} = $version;
+
+    return $r;
 }
 
 package Repository::Git::Head;
@@ -450,20 +478,6 @@ sub create_link {
     my $dest = $r->git("cat-file" => "blob" => "$head:$file");
     chomp($dest);
     symlink_absolute($dest, $dst) or die;
-}
-
-sub new {
-    my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
-    my $r = bless {}, $class;
-
-    $r->{relpath} = $path;
-    $r->{name} = $name;
-    $r->{url} = $url;
-    $r->{gitpath} = $gitpath;
-    $r->{date} = $date;
-    $r->{version} = $version;
-
-    return $r;
 }
 
 package Repository::Git::Head::New;
@@ -611,20 +625,6 @@ sub create_link {
     my $repo = $r->relpath;
 
     copy_or_hardlink("$pwd/$repo$file", $dst) or die;
-}
-
-sub new {
-    my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
-    my $r = bless {}, $class;
-
-    $r->{relpath} = $path;
-    $r->{name} = $name;
-    $r->{url} = $url;
-    $r->{gitpath} = $gitpath;
-    $r->{date} = $date;
-    $r->{version} = $version;
-
-    return $r;
 }
 
 package Repository::WD;
