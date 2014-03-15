@@ -178,9 +178,9 @@ our sub cat_file {
     mkdirp(xdirname($dst)) or die;
 
     if ($branch ne "") {
-	nsystem("(cd $master; git cat-file blob '$branch':'$file') > $dst") or die;
+	nsystem("cd '$master'; git cat-file blob '$branch':'$file' > $dst") or die;
     } else {
-	nsystem("cat $master/$file > $dst") or die;
+	nsystem("cat '$master'/'$file' > $dst") or die;
     }
 
     return 1;
@@ -295,8 +295,9 @@ sub git_find_descendant {
     my $d;
 
     for my $p ($r->git_parents($head)) {
-	if (nsystem("git merge-base --is-ancestor $p $a") and
-	    nsystem("git merge-base --is-ancestor $p $b")) {
+	# XXX test this
+	if ($r->git("merge-base" => "--is-ancestor", "$p", "$a") and
+	    $r->git("merge-base" => "--is-ancestor", "$p", "$b")) {
 	    return $r->git_find_descendant($p, $a, $b);
 	}
     }
@@ -516,7 +517,8 @@ sub find_siblings_and_types {
     $path //= $r->relpath;
     my $mdata = $dirstate->{mdata};
 
-    my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
+    $path = "." if $path eq "";
+    my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
 
@@ -649,11 +651,13 @@ sub find_changed {
     return if $dir eq "out" or $dir eq ".repo" or $dir eq ".git";
     my $pwd = $r->{pwd};
 
-    my @files = split(/\0/, `cd $pwd; find $dir -mindepth 1 -maxdepth 1 -print0`);
+    $dir = "." if $dir eq "";
+    my @files = split(/\0/, `cd '$pwd'; find '$dir' -mindepth 1 -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
+	next if $file eq "out" or $file eq ".repo";
 	next if ($dirstate->mdata->{repos}{$file . "/"});
 	$dirstate->store_item($file, {changed => 1});
 	if (-d "$pwd/$file") {
@@ -664,15 +668,16 @@ sub find_changed {
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
+    return if $path eq "out" or $path eq ".repo" or $path eq ".git";
     my $pwd = $r->{pwd};
 
-    return if $path eq "out" or $path eq ".repo" or $path eq ".git";
-
-    my @files = split(/\0/, `cd $pwd; find $path -mindepth 1 -maxdepth 1 -print0`);
+    $path = "." if $path eq "";
+    my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
 
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
+	next if $file eq "out" or $file eq ".repo";
 	next if ($dirstate->mdata->{repos}{$file . "/"});
 	if (-l "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"link"});
@@ -1014,9 +1019,9 @@ sub new {
 	    nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
 	}
 
-	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url)`;
+	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
     } else {
-	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url)`;
+	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url`;
     }
 
     map { $_ = [split(/ : /)] } @res;
@@ -1083,9 +1088,9 @@ sub new {
 	    nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
 	}
 
-	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url)`;
+	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
     } else {
-	@res = `(cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url)`;
+	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url`;
     }
 
     map { $_ = [split(/ : /)] } @res;
@@ -1276,7 +1281,7 @@ sub update_manifest {
     warn "rebuild tree! $apply_repo";
     my $date = `cd $pwd/$repo; git log -1 --pretty=tformat:\%ci $apply`;
     warn "date is $date";
-    my $new_mdata = new ManifestData::Head::New($apply, $date, 1);
+    my $new_mdata = new ManifestData::Head::New($apply, $date);
 
     my %rset;
     for my $repo ($new_mdata->repos, $mdata->repos) {
@@ -1331,6 +1336,11 @@ if ($do_new_versions) {
 	my $mdate = `cd '$pwd/.repo/manifests'; git log -1 --pretty=tformat:\%ci $apply_last_manifest`;
 	chomp($mdate);
 	$date = $mdate;
+    }
+    if (!defined($apply_last_manifest)) {
+	my $mm = `cd '$pwd/.repo/manifests'; git log -1 --first-parent --pretty=tformat:\%H --until='$date'`;
+	chomp($mm);
+	$apply_last_manifest = $mm;
     }
 } else {
     my $v = ManifestData::read_versions({});
@@ -1493,10 +1503,9 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
     }
 
     if ($do_commit) {
-	nsystem("(cd $outdir/head; git add --all .; git commit -m 'versioning commit for $apply' " .
+	nsystem("cd $outdir/head; git add --all .; git commit -m 'versioning commit for $apply' " .
 		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : "") .
-		")") or die;
+		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
     }
 }
 
@@ -1513,7 +1522,7 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 
 # perl ~/repo-tools/repo-log.pl --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do echo "$REPLY"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay"; done
 
-# perl ~/repo-tools/repo-log.pl --additional-dir=~/tmp-repo-overlay/other-repositories/ --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay"; sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay"; done
+# perl ~/repo-tools/repo-log.pl --additional-dir=~/tmp-repo-overlay/other-repositories/ --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay" && sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay" || break; done
 
 exit(0);
 
