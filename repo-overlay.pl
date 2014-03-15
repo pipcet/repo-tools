@@ -340,7 +340,7 @@ sub head {
     if ($do_new_versions) {
 	$head = $r->revparse($branch) // $r->revparse("HEAD");
     } else {
-	$head = $r->{version} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
+	$head = $r->version // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
     }
 
     die if $head eq "";
@@ -946,6 +946,34 @@ use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
 
+sub read_version {
+    my ($mdata, $repo) = @_;
+
+    return $mdata->{version}{$repo} if $mdata->{version} and $mdata->{version}{$repo};
+
+    my $version = { };
+    my $version_fh;
+
+    open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/'$repo' -name version.txt`|";
+    while (<$version_fh>) {
+	chomp;
+
+	my $path;
+	my $head;
+	my $name;
+	my $url;
+
+	if (($path, $head, $name, $url) = /^(.*): (.*) (.*) (.*)$/) {
+	    if ($head ne "") {
+		$version->{$path} = $head;
+	    }
+	}
+    }
+    close $version_fh;
+
+    return $version->{$repo};
+}
+
 sub read_versions {
     my ($mdata) = @_;
 
@@ -1232,28 +1260,28 @@ sub check_apply {
 	die "commit $apply isn't in $repo.";
     }
 
-    if ($version{$repo} eq "") {
+    if ($r->version eq "") {
 	warn "no version for $repo";
 	return;
-    } elsif (grep { $_ eq $version{$repo} } $r->git_parents($apply)) {
+    } elsif (grep { $_ eq $r->version } $r->git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
 	return;
     }
 
-    if ($r->gitp("merge-base" => "--is-ancestor", $apply, $version{$repo})) {
+    if ($r->gitp("merge-base" => "--is-ancestor", $apply, $r->version)) {
 	exit(0);
     }
 
-    my $msg = "cannot apply commit $apply to $repo @" . $version{$repo} . " != " . $r->revparse($apply . "^") . "\n";
-    if ($r->gitp("merge-base" => "--is-ancestor", $version{$repo}, $apply)) {
-	my $d = $r->git_find_missing_link($version{$repo}, $apply);
+    my $msg = "cannot apply commit $apply to $repo @" . $r->version . " != " . $r->revparse($apply . "^") . "\n";
+    if ($r->gitp("merge-base" => "--is-ancestor", $r->version, $apply)) {
+	my $d = $r->git_find_missing_link($r->version, $apply);
 	$msg .= "missing link for $repo:\n";
 
 	$msg .= `cd $pwd/$repo; git log -1 $d`;
     }
     if ($r->gitp("merge-base" => "--is-ancestor", $apply, "HEAD") &&
-	$r->gitp("merge-base" => "--is-ancestor", $version{$repo}, "HEAD")) {
-	my $d = $r->git_find_descendant("HEAD", $apply, $version{$repo});
+	$r->gitp("merge-base" => "--is-ancestor", $r->version, "HEAD")) {
+	my $d = $r->git_find_descendant("HEAD", $apply, $r->version);
 	$msg .= "but all will be good in the future.\n";
 	$msg .= "merge commit:\n";
 
@@ -1263,11 +1291,11 @@ sub check_apply {
     }
 
     $msg .= " repo ancestors:\n";
-    $msg .= "".$r->revparse($version{$repo}."")."\n";
-    $msg .= "".$r->revparse($version{$repo}."~1")."\n";
-    $msg .= "".$r->revparse($version{$repo}."~2")."\n";
-    $msg .= "".$r->revparse($version{$repo}."~3")."\n";
-    $msg .= "".$r->revparse($version{$repo}."~4")."\n";
+    $msg .= "".$r->revparse($r->version."")."\n";
+    $msg .= "".$r->revparse($r->version."~1")."\n";
+    $msg .= "".$r->revparse($r->version."~2")."\n";
+    $msg .= "".$r->revparse($r->version."~3")."\n";
+    $msg .= "".$r->revparse($r->version."~4")."\n";
     $msg .= " commit ancestors:\n";
     $msg .= "".$r->revparse($apply."")."\n";
     $msg .= "".$r->revparse($apply."~1")."\n";
