@@ -190,12 +190,6 @@ our sub cat_file {
 
 package Repository;
 
-sub mdata {
-    my ($r) = @_;
-
-    return $r->{mdata};
-}
-
 sub url {
     my ($r) = @_;
 
@@ -216,7 +210,6 @@ sub name {
 
 sub master {
     my ($r) = @_;
-    my $mdata = $r->mdata;
     my $name = $r->name;
 
     return $r->{master} if exists($r->{master});
@@ -246,7 +239,6 @@ sub gitpath {
     my $gitpath = $r->{gitpath};
 
     if ($gitpath eq "" or ! -e $gitpath) {
-	my $mdata = $r->mdata;
 	my $url = $r->url;
 
 	if (!($url=~/\/\//)) {
@@ -319,19 +311,17 @@ sub head {
 
     return $r->{head} if exists($r->{head});
 
-    my $mdata = $r->mdata;
     my $repo = $r->{relpath};
-    my $date = $mdata->{date} // "";
+    my $date = $r->{date} // "";
 
-    my $branch = $r->git(log => "-1", "--reverse", "--pretty=oneline", "--until=$date");
+    my $branch = $r->git(log => "-1", "--first-parent", "--reverse", "--pretty=oneline", "--until=$date");
     $branch = substr($branch, 0, 40);
 
     my $head;
     if ($do_new_versions) {
 	$head = $r->revparse($branch) // $r->revparse("HEAD");
     } else {
-	$mdata->read_versions();
-	$head = $mdata->{version}{$repo} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
+	$head = $r->{version} // die("$repo") // $r->revparse($branch) // $r->revparse("HEAD");
     }
 
     die if $head eq "";
@@ -379,7 +369,6 @@ sub find_changed {
 
     if (!defined($head)) {
 	$dirstate->store_item($repo, {changed=>1});
-	$mdata->{repos}{$repo}{deleted} = 1;
 	return;
     }
 
@@ -424,7 +413,6 @@ sub find_changed {
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
-    my $mdata = $dirstate->{mdata};
     my $repo = $r->relpath;
     my $head = $r->head;
 
@@ -466,14 +454,15 @@ sub create_link {
 }
 
 sub new {
-    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
+    my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
     my $r = bless {}, $class;
 
-    $r->{mdata} = $mdata; # XXX weaken
     $r->{relpath} = $path;
     $r->{name} = $name;
     $r->{url} = $url;
     $r->{gitpath} = $gitpath;
+    $r->{date} = $date;
+    $r->{version} = $version;
 
     return $r;
 }
@@ -568,7 +557,6 @@ sub find_changed {
 
     if (!defined($head)) {
 	$dirstate->store_item($repo, {changed=>1});
-	$mdata->{repos}{$repo}{deleted} = 1;
 	return;
     }
 
@@ -626,14 +614,15 @@ sub create_link {
 }
 
 sub new {
-    my ($class, $mdata, $path, $name, $url, $gitpath) = @_;
+    my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
     my $r = bless {}, $class;
 
-    $r->{mdata} = $mdata;
     $r->{relpath} = $path;
     $r->{name} = $name;
     $r->{url} = $url;
     $r->{gitpath} = $gitpath;
+    $r->{date} = $date;
+    $r->{version} = $version;
 
     return $r;
 }
@@ -704,10 +693,9 @@ sub find_siblings_and_types {
 }
 
 sub new {
-    my ($class, $mdata, $pwd) = @_;
+    my ($class, $pwd) = @_;
     my $r = bless {}, $class;
 
-    $r->{mdata} = $mdata;
     $r->{pwd} = $pwd;
 
     return $r;
@@ -991,7 +979,7 @@ sub new_repository {
     my ($mdata, $repopath, @args) = @_;
 
     $mdata->{repos}{$repopath} =
-	$mdata->repository_class->new($mdata, $repopath, @args);
+	$mdata->repository_class->new($repopath, @args);
 }
 
 package ManifestData::Head;
@@ -1006,12 +994,14 @@ sub new {
     my $repos_by_name_dir = "$outdir/repos-by-name";
     my $mdata = bless {}, $class;
 
+    $mdata->read_versions;
+
     $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
 
     if (!defined($version)) {
 	if (defined($date)) {
-	    $version = `cd $pwd/.repo/manifests; git log -1 --pretty=tformat:'\%H' --until='$date'`;
+	    $version = `cd $pwd/.repo/manifests; git log -1 --first-parent --pretty=tformat:'\%H' --until='$date'`;
 	    chomp($version);
 	}
     }
@@ -1038,16 +1028,19 @@ sub new {
     for my $r (@res) {
 	my ($repopath, $name, $url, $branchref) = @$r;
 	$mdata->new_repository($repopath, $name, $url,
-			       "$repos_by_name_dir/$name/repo");
+			       "$repos_by_name_dir/$name/repo",
+			       $date, $mdata->{version}{$repopath});
     }
 
     $mdata->new_repository(".repo/repo/", ".repo/repo", "",
-			   "$repos_by_name_dir/.repo/repo/repo");
+			   "$repos_by_name_dir/.repo/repo/repo",
+			   $date, $mdata->{version}{".repo/repo/"});
 
     $mdata->new_repository(".repo/manifests/", ".repo/manifests", "",
-			   "$repos_by_name_dir/.repo/manifests/repo");
+			   "$repos_by_name_dir/.repo/manifests/repo",
+			   $date, $mdata->{version}{".repo/manifests/"});
 
-    $mdata->{repos}{"/"} = new Repository::WD($mdata, $pwd);
+    $mdata->{repos}{"/"} = new Repository::WD($pwd);
 
     return $mdata;
 }
@@ -1067,16 +1060,17 @@ sub repository_class {
 }
 
 sub new {
-    my ($class, $version, $date, $new) = @_;
+    my ($class, $version, $date) = @_;
     my $repos_by_name_dir = "$outdir/repos-by-name";
     my $mdata = bless {}, $class;
 
     $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
+    $mdata->read_versions;
 
     if (!defined($version)) {
 	if (defined($date)) {
-	    $version = `cd $pwd/.repo/manifests; git log -1 --pretty=tformat:'\%H' --until='$date'`;
+	    $version = `cd $pwd/.repo/manifests; git log -1 --first-parent --pretty=tformat:'\%H' --until='$date'`;
 	    chomp($version);
 	}
     }
@@ -1103,16 +1097,19 @@ sub new {
     for my $r (@res) {
 	my ($repopath, $name, $url, $branchref) = @$r;
 	$mdata->new_repository($repopath, $name, $url,
-			       "$repos_by_name_dir/$name/repo");
+			       "$repos_by_name_dir/$name/repo",
+			       $date, $mdata->{version}{$repopath});
     }
 
     $mdata->new_repository(".repo/repo/", ".repo/repo", "",
-			   "$repos_by_name_dir/.repo/repo/repo");
+			   "$repos_by_name_dir/.repo/repo/repo",
+			   $date, $mdata->{version}{".repo/repo/"});
 
     $mdata->new_repository(".repo/manifests/", ".repo/manifests", "",
-			   "$repos_by_name_dir/.repo/manifests/repo");
+			   "$repos_by_name_dir/.repo/manifests/repo",
+			   $date, $mdata->{version}{".repo/manifests/"});
 
-    $mdata->{repos}{"/"} = new Repository::WD($mdata, $pwd);
+    $mdata->{repos}{"/"} = new Repository::WD($pwd);
 
     return $mdata;
 }
