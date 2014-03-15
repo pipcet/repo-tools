@@ -34,7 +34,6 @@ my $apply_last_manifest;
 my $outdir;
 my $indir = ".";
 
-my $branch = '@{February.1}'; # XXX
 my $commit_message_file;
 
 my $commit_commitdate;
@@ -49,7 +48,6 @@ GetOptions(
     "hardlink!" => \$do_hardlink,
     "out=s" => \$outdir,
     "in=s" => \$indir,
-    "branch=s" => \$branch,
     "print-range!" => \$do_print_range,
     "new-versions!" => \$do_new_versions,
     "new-symlinks!" => \$do_new_symlinks,
