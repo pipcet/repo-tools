@@ -461,31 +461,47 @@ sub find_changed {
     }
 }
 
-sub find_siblings_and_types {
-    my ($r, $dirstate, $path) = @_;
+sub find_siblings_and_types_rec {
+    my ($r, $dirstate, $tree, $path) = @_;
+    my $raw = $r->gitrepository;
     my $repo = $r->relpath;
-    my $head = $r->head;
 
-    my @lstree_lines = $r->gitz("ls-tree" => "$head:$path");
+    for my $entry ($tree->entries) {
+	my $filemode = $entry->filemode;
+	my $name = $entry->name;
 
-    my @modes = map { /^(\d\d\d)(\d\d\d) ([^ ]*) ([^ \t]*)\t(.*)$/ or die; { mode=> $2, extmode => $1, path => $path.(($path eq "")?"":"/").$5 } } @lstree_lines;
+	warn $name . $filemode;
+	my $extmode = substr($filemode, 0, 3);
 
-    for my $m (@modes) {
-	my $path = $m->{path};
-
-	if ($m->{extmode} eq "120") {
-	    $dirstate->store_item($repo.$path, {type=>"link"});
-	} elsif ($m->{extmode} eq "100") {
-	    $dirstate->store_item($repo.$path, {type=>"file"});
-	} elsif ($m->{extmode} eq "040") {
-	    $dirstate->store_item($repo.$path, {type=>"dir"});
-	    $r->find_siblings_and_types($dirstate, $path)
+	if ($extmode eq "120") {
+	    $dirstate->store_item($repo.$path.$name, {type=>"link"});
+	} elsif ($extmode eq "100") {
+	    $dirstate->store_item($repo.$path.$name, {type=>"file"});
+	} elsif ($extmode eq "040") {
+	    $dirstate->store_item($repo.$path.$name, {type=>"dir"});
+	    $r->find_siblings_and_types_rec($dirstate, $entry->object, "$path$name/")
 		if $dirstate->changed($repo.$path);
 	} else {
 	    die "unknown mode";
 	}
     }
+}
 
+sub find_siblings_and_types {
+    my ($r, $dirstate, $path) = @_;
+    my $repo = $r->relpath;
+    my $head = $r->head;
+    my $raw = $r->gitrepository;
+
+    my $tree = $raw->head;
+
+    while ($tree->isa("Git::Raw::Reference")) {
+	$tree = $tree->target;
+    }
+
+    die $tree unless $tree->isa("Git::Raw::Tree");
+
+    $r->find_siblings_and_types_rec($dirstate, $tree, "");
 }
 
 sub create_file {
