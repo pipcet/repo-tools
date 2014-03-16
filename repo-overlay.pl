@@ -547,6 +547,7 @@ sub find_siblings_and_types {
     $path = "." if $path eq "";
     my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
 
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
@@ -555,7 +556,7 @@ sub find_siblings_and_types {
 	    $dirstate->store_item($file, {type=>"link"});
 	} elsif (!-e "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"none"});
-	} elsif (-d "$pwd/$file") {
+	} elsif (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
 	    $dirstate->store_item($file, {type=>"dir"});
 	    $r->find_siblings_and_types($dirstate, $file)
 		if $dirstate->changed($file);
@@ -661,19 +662,19 @@ sub create_link {
 
 sub find_changed {
     my ($r, $dirstate, $dir) = @_;
-    return if $dir eq "out" or $dir eq ".repo" or $dir eq ".git";
     my $pwd = $r->{pwd};
 
     $dir = "." if $dir eq "";
     my @files = split(/\0/, `cd '$pwd'; find '$dir' -mindepth 1 -maxdepth 1 -print0`);
 
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
 	next if $file eq "out" or $file eq ".repo";
 	next if ($dirstate->mdata->{repos}{$file . "/"});
 	$dirstate->store_item($file, {changed => 1});
-	if (-d "$pwd/$file") {
+	if (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
 	    $r->find_changed($dirstate, $file);
 	}
     }
@@ -681,22 +682,21 @@ sub find_changed {
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
-    return if $path eq "out" or $path eq ".repo" or $path eq ".git";
     my $pwd = $r->{pwd};
 
     $path = "." if $path eq "";
     my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
 
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
-	next if $file eq "out" or $file eq ".repo";
 	next if ($dirstate->mdata->{repos}{$file . "/"});
 	if (-l "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"link"});
 	} elsif (!-e "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"none"});
-	} elsif (-d "$pwd/$file") {
+	} elsif (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
 	    $dirstate->store_item($file, {type=>"dir"});
 	    $r->find_siblings_and_types($dirstate, $file)
 		if $dirstate->changed($file);
