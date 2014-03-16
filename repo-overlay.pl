@@ -1546,6 +1546,12 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 }
 
 # useful commands:
+# mkdir ~/tmp-repo-overlay/head
+# git clone ~/jordan-android/ ~/tmp-repo-overlay/head/
+# time perl ~/repo-tools/repo-overlay.pl --date=March.1 --new-symlinks --new-versions --out=/home/pip/tmp-repo-overlay
+# perl ~/repo-tools/repo-log.pl --since=March.1 --additional-dir=/home/pip/tmp-repo-overlay/other-repositories --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay" && sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay" || break; done
+
+
 #  repo-overlay.pl -- sync repository to wd/ head/
 #  diff -ur repo-overlay/ wd/|(cd repo-overlay; patch -p1) -- sync wd/ to repository (doesn't handle new/deleted files)
 #  diff -urNx .git -x .repo -x out -x out-old repo-overlay/ wd/|(cd repo-overlay; patch -p1)
