@@ -422,27 +422,6 @@ sub find_changed {
 	return;
     }
 
-    my $statuses = $r->gitrepository->status;
-
-    for my $path (keys %$statuses) {
-	my $status = $statuses->{$path};
-	my %flag;
-
-	for my $flag (@{$status->{flags}}) {
-	    $flag{$flag} = 1;
-	}
-
-	next if $flag{ignored};
-
-	if ($flag{worktree_modified}) {
-	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1}, 1);
-	} elsif ($flag{worktree_deleted}) {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1}, 1);
-	} elsif ($flag{worktree_new}) {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1}, 1);
-	}
-    }
-
     my %diffstat = reverse $r->gitz(diff => "$head", "--name-status");
 
     for my $path (keys %diffstat) {
