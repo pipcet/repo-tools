@@ -940,22 +940,25 @@ sub read_version {
     my $version_fh;
 
     # XXX
-    open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/'$repo' -name version.txt`|";
-    while (<$version_fh>) {
-	chomp;
+    if (-d "$outdir/head/.pipcet-ro/versions/$repo") {
+	open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/'$repo' -name version.txt`|";
+	while (<$version_fh>) {
+	    chomp;
+	    next if /^#/;
 
-	my $path;
-	my $head;
-	my $name;
-	my $url;
+	    my $path;
+	    my $head;
+	    my $name;
+	    my $url;
 
-	if (($path, $head, $name, $url) = /^(.*): (.*) (.*) (.*)$/) {
-	    if ($head ne "") {
-		$version->{$path} = $head;
+	    if (($path, $head, $name, $url) = /^(.*): (.*) (.*) (.*)$/) {
+		if ($head ne "") {
+		    $version->{$path} = $head;
+		}
 	    }
 	}
+	close $version_fh;
     }
-    close $version_fh;
 
     return $version->{$repo};
 }
@@ -969,22 +972,25 @@ sub read_versions {
     my $version_fh;
 
     # XXX
-    open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/ -name version.txt`|";
-    while (<$version_fh>) {
-	chomp;
+    if (-d "$outdir/head/.pipcet-ro/versions") {
+	open $version_fh, "cat /dev/null `find $outdir/head/.pipcet-ro/versions/ -name version.txt`|";
+	while (<$version_fh>) {
+	    chomp;
+	    next if /^#/;
 
-	my $path;
-	my $head;
-	my $name;
-	my $url;
+	    my $path;
+	    my $head;
+	    my $name;
+	    my $url;
 
-	if (($path, $head, $name, $url) = /^(.*): (.*) (.*) (.*)$/) {
-	    if ($head ne "") {
-		$version->{$path} = $head;
+	    if (($path, $head, $name, $url) = /^(.*): (.*) (.*) (.*)$/) {
+		if ($head ne "") {
+		    $version->{$path} = $head;
+		}
 	    }
 	}
+	close $version_fh;
     }
-    close $version_fh;
 
     $mdata->{version} = $version;
 
