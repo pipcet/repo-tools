@@ -567,7 +567,10 @@ sub find_siblings_and_types {
     my $mdata = $dirstate->{mdata};
 
     $path = "." if $path eq "";
-    my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
+    my $dh;
+    opendir $dh, $path or die;
+    my @files = map { "$path/$_" }readdir $dh;
+    close $dh;
 
     @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
     map { s/^\.\///; } @files;
@@ -689,7 +692,10 @@ sub find_changed {
     my $pwd = $r->{pwd};
 
     $dir = "." if $dir eq "";
-    my @files = split(/\0/, `cd '$pwd'; find '$dir' -mindepth 1 -maxdepth 1 -print0`);
+    my $dh;
+    opendir $dh, $dir or die;
+    my @files = map { "$dir/$_" }readdir $dh;
+    close $dh;
 
     @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
     map { s/^\.\///; } @files;
@@ -709,7 +715,10 @@ sub find_siblings_and_types {
     my $pwd = $r->{pwd};
 
     $path = "." if $path eq "";
-    my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
+    my $dh;
+    opendir $dh, "$pwd/$path" or die;
+    my @files = map { "$path/$_" } readdir $dh;
+    close $dh;
 
     @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
     map { s/^\.\///; } @files;
