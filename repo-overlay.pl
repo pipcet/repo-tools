@@ -1042,9 +1042,10 @@ sub new {
 	    nsystem("cp -a $pwd/.repo/local_manifests $outdir/manifests/$version/") or die;
 	    nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests") or die;
 	    nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
+	    nsystem("cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url > $outdir/manifests/$version/output") or die;
 	}
 
-	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
+	@res = `cat $outdir/manifests/$version/output`;
     } else {
 	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url`;
     }
@@ -1111,9 +1112,10 @@ sub new {
 	    nsystem("cp -a $pwd/.repo/local_manifests $outdir/manifests/$version/") or die;
 	    nsystem("git clone $pwd/.repo/manifests $outdir/manifests/$version/manifests") or die;
 	    nsystem("(cd $outdir/manifests/$version/manifests && git checkout $version && cp -a .git ../manifests.git && ln -s manifests/default.xml ../manifest.xml && git config remote.origin.url git://github.com/Quarx2k/android.git)") or die;
+	    nsystem("cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url` > $outdir/manifests/$version/output")
 	}
 
-	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$outdir/manifests/$version -- list --url`;
+	@res = `cat $outdir/manifests/$version/output`;
     } else {
 	@res = `cd $pwd; python $pwd/.repo/repo/main.py --wrapper-version=1.21 --repo-dir=$pwd/.repo -- list --url`;
     }
