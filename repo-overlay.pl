@@ -1181,7 +1181,7 @@ sub prefixes {
     my ($path) = @_;
     my @res;
 
-    while ($path ne ".") {
+    while ($path ne "") {
 	push @res, $path;
 	$path = xdirname($path);
     }
