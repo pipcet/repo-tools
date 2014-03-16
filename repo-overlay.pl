@@ -10,6 +10,8 @@ use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
 use Carp::Always;
 
+use Git::Raw;
+
 my $do_new_versions;
 my $do_new_symlinks;
 my $do_print_range;
@@ -331,6 +333,14 @@ sub head {
     $r->{head} = $head;
 
     return $head;
+}
+
+sub gitrepository {
+    my ($r) = @_;
+
+    return $r->{gitrepository} if exists($r->{gitrepository});
+
+    return ($r->{gitrepository} = Git::Raw::Repository->open($r->gitpath));
 }
 
 sub git {
