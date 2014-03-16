@@ -493,11 +493,7 @@ sub find_siblings_and_types {
     my $head = $r->head;
     my $raw = $r->gitrepository;
 
-    my $tree = $raw->head;
-
-    while ($tree->isa("Git::Raw::Reference")) {
-	$tree = $tree->target;
-    }
+    my $tree = $raw->head->tree;
 
     die $tree unless $tree->isa("Git::Raw::Tree");
 
