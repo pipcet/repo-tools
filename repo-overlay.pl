@@ -402,7 +402,7 @@ sub find_changed {
 
     $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+	$dirstate->store_item(xdirname($repo), {type=>"dir"});
     } else {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
@@ -580,7 +580,7 @@ sub find_changed {
 
     $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+	$dirstate->store_item(xdirname($repo), {type=>"dir"});
     } else {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
