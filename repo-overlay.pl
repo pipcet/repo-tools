@@ -569,10 +569,10 @@ sub find_siblings_and_types {
     $path = "." if $path eq "";
     my $dh;
     opendir $dh, $path or die;
-    my @files = map { "$path/$_" }readdir $dh;
+    my @files = map { "$path/$_" } readdir $dh;
     close $dh;
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git||\.))$/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
@@ -697,7 +697,7 @@ sub find_changed {
     my @files = map { "$dir/$_" }readdir $dh;
     close $dh;
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git||\.))$/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
@@ -720,7 +720,7 @@ sub find_siblings_and_types {
     my @files = map { "$path/$_" } readdir $dh;
     close $dh;
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git||\.))$/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
