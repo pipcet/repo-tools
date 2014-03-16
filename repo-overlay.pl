@@ -556,10 +556,12 @@ sub find_siblings_and_types {
 	    $dirstate->store_item($file, {type=>"link"});
 	} elsif (!-e "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"none"});
-	} elsif (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
-	    $dirstate->store_item($file, {type=>"dir"});
-	    $r->find_siblings_and_types($dirstate, $file)
-		if $dirstate->changed($file);
+	} elsif (-d "$pwd/$file") {
+	    if (!-d "$pwd/$file/.git") {
+		$dirstate->store_item($file, {type=>"dir"});
+		$r->find_siblings_and_types($dirstate, $file)
+		    if $dirstate->changed($file);
+	    }
 	} elsif (-f "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"file"});
 	} else {
@@ -696,10 +698,12 @@ sub find_siblings_and_types {
 	    $dirstate->store_item($file, {type=>"link"});
 	} elsif (!-e "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"none"});
-	} elsif (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
-	    $dirstate->store_item($file, {type=>"dir"});
-	    $r->find_siblings_and_types($dirstate, $file)
-		if $dirstate->changed($file);
+	} elsif (-d "$pwd/$file") {
+	    if (!-d "$pwd/$file/.git") {
+		$dirstate->store_item($file, {type=>"dir"});
+		$r->find_siblings_and_types($dirstate, $file)
+		    if $dirstate->changed($file);
+	    }
 	} elsif (-f "$pwd/$file") {
 	    $dirstate->store_item($file, {type=>"file"});
 	} else {
