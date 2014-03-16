@@ -547,7 +547,7 @@ sub find_siblings_and_types {
     $path = "." if $path eq "";
     my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))/ } @files;
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
@@ -669,13 +669,13 @@ sub find_changed {
     $dir = "." if $dir eq "";
     my @files = split(/\0/, `cd '$pwd'; find '$dir' -mindepth 1 -maxdepth 1 -print0`);
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))/ } @files;
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
-	next if $file eq "out" or $file eq ".repo";
 	next if ($dirstate->mdata->{repos}{$file . "/"});
-	$dirstate->store_item($file, {changed => 1});
+	$dirstate->store_item($file, {changed => 1})
+	    unless -d "$pwd/$file";
 	if (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
 	    $r->find_changed($dirstate, $file);
 	}
@@ -689,7 +689,7 @@ sub find_siblings_and_types {
     $path = "." if $path eq "";
     my @files = split(/\0/, `cd $pwd; find '$path' -mindepth 1 -maxdepth 1 -print0`);
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))/ } @files;
+    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git))$/ } @files;
     map { s/^\.\///; } @files;
 
     for my $file (@files) {
