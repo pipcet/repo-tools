@@ -339,7 +339,7 @@ sub git {
     die if grep { /\'/ } @args;
 
     my $path = $r->gitpath;
-    my $cmd = "cd '$path'; git " . join(" ", map { "'$_'" } @args);
+    my $cmd = "cd '$path'; git " . join(" ", map { "'$_'" } @args) . " 2>/dev/null";
 
     my $output = `$cmd`;
 
