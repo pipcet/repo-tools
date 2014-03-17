@@ -571,7 +571,6 @@ sub create_file {
 
 	my $fh;
 	open $fh, ">$dst" or die;
-	warn "$file " . substr($blob->content, 0, 100);
 	print $fh $blob->content;
 	close $fh;
     } else {
