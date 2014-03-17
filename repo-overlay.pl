@@ -371,6 +371,28 @@ sub gitz {
     return split(/\0/, $r->git(@args, "-z"));
 }
 
+# poor man's asynchronous I/O: open all the pipes first (most of them
+# will be closed without receiving any output), then go through them
+# again and read/close them.
+
+sub gitz_start {
+    my ($r, @args) = @_;
+    push @args, "-z";
+    my $fh;
+    my $path = $r->gitpath;
+    my $cmd = "cd '$path'; git " . join(" ", map { "'$_'" } @args) . " 2>/dev/null";
+
+    open $fh, "$cmd|" or die;
+
+    return sub {
+	my @output = split(/\0/, join("", readline($fh)));
+
+	close($fh);
+
+	return @output;
+    };
+}
+
 sub git_ancestor {
     my ($r, $a, $b) = @_;
 
@@ -399,7 +421,29 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
-use Carp::Always;
+
+sub find_changed_start {
+    my ($r, $dirstate) = @_;
+    my $mdata = $dirstate->{mdata};
+    my $repo = $r->relpath;
+    my $head = $r->head;
+    my $oldhead = $r->{oldhead};
+    my $newhead = $r->{newhead};
+
+    $dirstate->store_item($repo, { type=>"dir" });
+    if (begins_with($r->master, "$pwd/")) {
+	$dirstate->store_item(xdirname($repo), {type=>"dir"});
+    } else {
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+    }
+
+    if (!defined($head)) {
+	$dirstate->store_item($repo, {changed=>1});
+	return;
+    }
+
+    $r->{pipe} = $r->gitz_start(diff => "$head", "--name-status");
+}
 
 sub find_changed {
     my ($r, $dirstate) = @_;
@@ -421,7 +465,7 @@ sub find_changed {
 	return;
     }
 
-    my %diffstat = reverse $r->gitz(diff => "$head", "--name-status");
+    my %diffstat = reverse $r->{pipe}->();
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
@@ -603,6 +647,29 @@ sub find_siblings_and_types {
     }
 }
 
+sub find_changed_start {
+    my ($r, $dirstate) = @_;
+    my $mdata = $dirstate->{mdata};
+    my $repo = $r->relpath;
+    my $head = $r->head;
+    my $oldhead = $r->{oldhead};
+    my $newhead = $r->{newhead};
+
+    $dirstate->store_item($repo, { type=>"dir" });
+    if (begins_with($r->master, "$pwd/")) {
+	$dirstate->store_item(xdirname($repo), {type=>"dir"});
+    } else {
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+    }
+
+    if (!defined($head)) {
+	$dirstate->store_item($repo, {changed=>1});
+	return;
+    }
+
+    $r->{pipe} = $r->gitz_start(diff => "$head", "--name-status");
+}
+
 sub find_changed {
     my ($r, $dirstate) = @_;
     my $mdata = $dirstate->{mdata};
@@ -623,7 +690,7 @@ sub find_changed {
 	return;
     }
 
-    my %diffstat = reverse $r->gitz(diff => "$head", "--name-status");
+    my %diffstat = reverse $r->{pipe}->();
 
     for my $path (keys %diffstat) {
 	my $stat = $diffstat{$path};
@@ -694,6 +761,8 @@ sub create_link {
 
     copy_or_hardlink("$pwd/$repo$file", $dst) or die;
 }
+
+sub find_changed_start {}
 
 sub find_changed {
     my ($r, $dirstate, $path) = @_;
@@ -930,6 +999,12 @@ sub snapshot {
     nsystem("mkdir -p $outdir") or die;
 
     @repos = $dirstate->repos unless (@repos);
+
+    for my $repo (@repos) {
+	my $mdata = $dirstate->mdata;
+	my $r = $mdata->repositories($repo);
+	$r->find_changed_start($dirstate);
+    }
 
     for my $repo (@repos) {
 	my $mdata = $dirstate->mdata;
