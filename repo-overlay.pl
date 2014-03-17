@@ -40,7 +40,6 @@ my $commit_commitdate;
 my $commit_committer;
 my $commit_authordate;
 my $commit_author;
-my $arg_recurse=10;
 
 my $date;
 
@@ -61,7 +60,6 @@ GetOptions(
     "commit-author=s" => \$commit_author,
     "commit-commitdate=s" => \$commit_commitdate,
     "commit-committer=s" => \$commit_committer,
-    "recurse=i" => \$arg_recurse,
     "emancipate!" => \$do_emancipate,
     "de-emancipate!" => \$do_de_emancipate,
     "date=s" => \$date,
