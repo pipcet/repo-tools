@@ -522,11 +522,11 @@ sub create_file {
 
 sub create_link {
     my ($r, $file, $dst) = @_;
-    my $head = $r->head;
+    my $tree = $r->gitrawtree;
+    my $entry = $tree->entry_bypath($file);
+    my $blob = $entry->object;
 
-    my $dest = $r->git("cat-file" => "blob" => "$head:$file");
-    chomp($dest);
-    symlink_absolute($dest, $dst) or die;
+    symlink_absolute($blob->content, $dst) or die;
 }
 
 package Repository::Git::Head::New;
