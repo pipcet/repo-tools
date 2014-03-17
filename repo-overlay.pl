@@ -677,9 +677,9 @@ sub find_changed {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
-    my %diffstat = reverse $r->{pipe}->();
+    my @stat = $r->{pipe}->();
 
-    for my $line (keys %diffstat) {
+    for my $line (@stat) {
 	my ($stat, $path) = ($line =~ /^(..) (.*)$/msg);
 
 	if ($stat eq " M") {
