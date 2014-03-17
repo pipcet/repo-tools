@@ -251,7 +251,7 @@ sub gitpath {
 sub version {
     my ($r) = @_;
 
-    return $r->{version};
+    return $r->{version}->();
 }
 
 sub revparse {
@@ -1191,16 +1191,24 @@ sub new {
 	my ($repopath, $name, $url, $branchref) = @$r;
 	$mdata->new_repository($repopath, $name, $url,
 			       "$repos_by_name_dir/$name/repo",
-			       $date, $mdata->{version}{$repopath});
+			       $date, sub { $mdata->read_version($repopath) });
     }
 
-    $mdata->new_repository(".repo/repo/", ".repo/repo", "",
-			   "$repos_by_name_dir/.repo/repo/repo",
-			   $date, $mdata->{version}{".repo/repo/"});
+    {
+	my $repopath = ".repo/repo/";
 
-    $mdata->new_repository(".repo/manifests/", ".repo/manifests", "",
-			   "$repos_by_name_dir/.repo/manifests/repo",
-			   $date, $mdata->{version}{".repo/manifests/"});
+	$mdata->new_repository($repopath, ".repo/repo", "",
+			   "$repos_by_name_dir/.repo/repo/repo",
+			       $date, sub { $mdata->read_version($repopath) });
+    }
+
+    {
+	my $repopath = ".repo/manifests/";
+
+	$mdata->new_repository($repopath, ".repo/manifests", "",
+			       "$repos_by_name_dir/.repo/manifests/repo",
+			       $date, sub { $mdata->read_version($repopath) });
+    }
 
     $mdata->{repos}{"/"} = new Repository::WD($pwd);
 
