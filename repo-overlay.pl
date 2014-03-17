@@ -126,6 +126,10 @@ our sub xdirname {
 our sub mkdirp {
     my ($dir) = @_;
 
+    for my $pref (prefixes($dir)) {
+	die $pref if -l $pref;
+    }
+
     make_path($dir);
 
     return 1;
