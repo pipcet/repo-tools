@@ -158,20 +158,6 @@ our sub copy_or_hardlink {
     return fcopy($src, $dst);
 }
 
-our sub cat_file {
-    my ($master, $branch, $file, $dst) = @_;
-
-    mkdirp(xdirname($dst)) or die;
-
-    if ($branch ne "") {
-	nsystem("cd '$master'; git cat-file blob '$branch':'$file' > $dst") or die;
-    } else {
-	nsystem("cat '$master'/'$file' > $dst") or die;
-    }
-
-    return 1;
-}
-
 package Repository;
 
 sub url {
@@ -514,7 +500,24 @@ sub find_siblings_and_types {
 sub create_file {
     my ($r, $file, $dst) = @_;
 
-    cat_file($r->master, $r->head, $file, $dst);
+    mkdirp(xdirname($dst)) or die;
+
+    if ($r->head ne "") {
+	my $tree = $r->gitrawtree;
+
+	my $entry = $tree->entry_bypath($file);
+	my $blob = $entry->object;
+
+	my $fh;
+	open $fh, ">$dst" or die;
+	warn "$file " . substr($blob->content, 0, 100);
+	print $fh $blob->content;
+	close $fh;
+    } else {
+	return fcopy($r->master.$file, $dst);
+    }
+
+    return 1;
 }
 
 sub create_link {
