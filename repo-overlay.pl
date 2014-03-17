@@ -243,6 +243,23 @@ sub revparse {
     }
 }
 
+sub revparse_start {
+    my ($r, $head) = @_;
+
+    my $s = $r->gitz_start("rev-parse" => $head);
+    return sub {
+	my ($last) = $s->();
+	$last =~ s/\n-z\n$//msg;
+
+	if ($last =~ /[^0-9a-f]/ or
+	    length($last) < 10) {
+	    return undef;
+	} else {
+	    return $last;
+	}
+    };
+}
+
 sub git_parents {
     my ($r, $commit) = @_;
 
@@ -289,10 +306,40 @@ sub git_find_missing_link {
     return undef;
 }
 
+sub head_phase1 {
+    my ($r) = @_;
+
+    $r->{lazy_branch} = $r->gitz_start(log => "-1", "--first-parent", "--reverse", "--pretty=oneline", "--until=$date");
+}
+
+sub head_phase2 {
+    my ($r) = @_;
+
+    my ($branch) = $r->{lazy_branch}->();
+
+    $branch = substr($branch, 0, 40);
+
+    $r->{lazy_head1} = $r->revparse_start($branch);
+    $r->{lazy_head2} = $r->revparse_start("HEAD");
+
+    if ($do_new_versions) {
+	$r->{lazy_head} = sub {
+	    my ($h1) = $r->{lazy_head1}->();
+	    return $h1 if defined($h1);
+	    my ($h2) = $r->{lazy_head2}->();
+	    return $h2;
+	};
+    }
+}
+
 sub head {
     my ($r) = @_;
 
     return $r->{head} if exists($r->{head});
+
+    if ($r->{lazy_head}) {
+	return ($r->{head} = $r->{lazy_head}->());
+    }
 
     my $repo = $r->{relpath};
     my $date = $r->{date} // "";
@@ -380,9 +427,9 @@ sub gitz_start {
     push @args, "-z";
     my $fh;
     my $path = $r->gitpath;
-    my $cmd = "cd '$path'; git " . join(" ", map { "'$_'" } @args) . " 2>/dev/null";
+    my $cmd = "cd '$path'; git " . join(" ", map { "'$_'" } @args) . "";
 
-    open $fh, "$cmd|" or die;
+    open $fh, "$cmd|" or die "$cmd: $!";
 
     return sub {
 	my @output = split(/\0/, join("", readline($fh)));
@@ -999,6 +1046,18 @@ sub snapshot {
     nsystem("mkdir -p $outdir") or die;
 
     @repos = $dirstate->repos unless (@repos);
+
+    for my $repo (@repos) {
+	my $mdata = $dirstate->mdata;
+	my $r = $mdata->repositories($repo);
+	$r->head_phase1() if $r->can("head_phase1");
+    }
+
+    for my $repo (@repos) {
+	my $mdata = $dirstate->mdata;
+	my $r = $mdata->repositories($repo);
+	$r->head_phase2() if $r->can("head_phase2");
+    }
 
     for my $repo (@repos) {
 	my $mdata = $dirstate->mdata;
