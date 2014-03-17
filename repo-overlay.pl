@@ -566,14 +566,14 @@ sub find_siblings_and_types {
     $path //= $r->relpath;
     my $mdata = $dirstate->{mdata};
 
-    $path = "." if $path eq "";
     my $dh;
-    opendir $dh, $path or die;
-    my @files = map { "$path/$_" } readdir $dh;
+    opendir $dh, "$pwd/$path" or die;
+    my @files = readdir $dh;
     close $dh;
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git||\.))$/ } @files;
-    map { s/^\.\///; } @files;
+    @files = grep { $_ ne "." and $_ ne ".." and $_ ne ".git" and $_ ne ".repo" } @files;
+    @files = map { "$path$_" } @files;
+    @files = grep { $_ ne "out" } @files;
 
     for my $file (@files) {
 	next if $mdata->{repos}{$file . "/"};
@@ -584,7 +584,7 @@ sub find_siblings_and_types {
 	} elsif (-d "$pwd/$file") {
 	    if (!-d "$pwd/$file/.git") {
 		$dirstate->store_item($file, {type=>"dir"});
-		$r->find_siblings_and_types($dirstate, $file)
+		$r->find_siblings_and_types($dirstate, "$file/")
 		    if $dirstate->changed($file);
 	    }
 	} elsif (-f "$pwd/$file") {
@@ -688,24 +688,24 @@ sub create_link {
 }
 
 sub find_changed {
-    my ($r, $dirstate, $dir) = @_;
+    my ($r, $dirstate, $path) = @_;
     my $pwd = $r->{pwd};
 
-    $dir = "." if $dir eq "";
     my $dh;
-    opendir $dh, $dir or die;
-    my @files = map { "$dir/$_" }readdir $dh;
+    opendir $dh, "$pwd/$path" or die;
+    my @files = readdir $dh;
     close $dh;
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git||\.))$/ } @files;
-    map { s/^\.\///; } @files;
+    @files = grep { $_ ne "." and $_ ne ".." and $_ ne ".git" and $_ ne ".repo" } @files;
+    @files = map { "$path$_" } @files;
+    @files = grep { $_ ne "out" } @files;
 
     for my $file (@files) {
 	next if ($dirstate->mdata->{repos}{$file . "/"});
 	$dirstate->store_item($file, {changed => 1})
 	    unless -d "$pwd/$file";
 	if (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
-	    $r->find_changed($dirstate, $file);
+	    $r->find_changed($dirstate, "$file/");
 	}
     }
 }
@@ -714,14 +714,14 @@ sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     my $pwd = $r->{pwd};
 
-    $path = "." if $path eq "";
     my $dh;
     opendir $dh, "$pwd/$path" or die;
-    my @files = map { "$path/$_" } readdir $dh;
+    my @files = readdir $dh;
     close $dh;
 
-    @files = grep { $_ ne "./out" and $_ !~ /\/(\.(repo|git||\.))$/ } @files;
-    map { s/^\.\///; } @files;
+    @files = grep { $_ ne "." and $_ ne ".." and $_ ne ".git" and $_ ne ".repo" } @files;
+    @files = map { "$path$_" } @files;
+    @files = grep { $_ ne "out" } @files;
 
     for my $file (@files) {
 	next if ($dirstate->mdata->{repos}{$file . "/"});
@@ -732,7 +732,7 @@ sub find_siblings_and_types {
 	} elsif (-d "$pwd/$file") {
 	    if (!-d "$pwd/$file/.git") {
 		$dirstate->store_item($file, {type=>"dir"});
-		$r->find_siblings_and_types($dirstate, $file)
+		$r->find_siblings_and_types($dirstate, "$file/")
 		    if $dirstate->changed($file);
 	    }
 	} elsif (-f "$pwd/$file") {
