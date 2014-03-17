@@ -479,7 +479,7 @@ sub find_siblings_and_types_rec {
 	    $r->find_siblings_and_types_rec($dirstate, $entry->object, "$path$name/")
 		if $dirstate->changed($repo.$path);
 	} else {
-	    die "unknown mode";
+	    die "unknown mode $filemode";
 	}
     }
 }
