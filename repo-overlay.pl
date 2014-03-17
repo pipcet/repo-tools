@@ -333,6 +333,21 @@ sub head {
     return $head;
 }
 
+sub gitrawtree {
+    my ($r) = @_;
+
+    return $r->{gitrawtree} if exists($r->{gitrawtree});
+
+    my $raw = $r->gitrepository;
+    my $head = $raw->lookup($r->head);
+
+    $head = $head->target while $head->isa("Git::Raw::Reference");
+
+    my $tree = $head->tree;
+
+    return ($r->{gitrawtree} = $tree);
+}
+
 sub gitrepository {
     my ($r) = @_;
 
