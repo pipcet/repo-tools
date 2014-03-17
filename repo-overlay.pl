@@ -1155,8 +1155,6 @@ sub new {
     my $repos_by_name_dir = "$outdir/repos-by-name";
     my $mdata = bless {}, $class;
 
-    $mdata->read_versions;
-
     $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
 
@@ -1236,7 +1234,6 @@ sub new {
 
     $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
-    $mdata->read_versions;
 
     if (!defined($version)) {
 	if (defined($date)) {
