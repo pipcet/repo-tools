@@ -486,13 +486,7 @@ sub find_siblings_and_types_rec {
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
-    my $repo = $r->relpath;
-    my $head = $r->head;
-    my $raw = $r->gitrepository;
-
-    my $tree = $raw->head->tree;
-
-    die $tree unless $tree->isa("Git::Raw::Tree");
+    my $tree = $r->gitrawtree;
 
     $r->find_siblings_and_types_rec($dirstate, $tree, "");
 }
