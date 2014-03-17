@@ -158,6 +158,25 @@ our sub copy_or_hardlink {
     return fcopy($src, $dst);
 }
 
+our sub delete_repository {
+    # we have to be careful: our repository might live behind a
+    # symlink, in which case we mustn't follow it to delete behind the
+    # symlink, but delete the actual symlink instead.
+
+    my ($outdir, $repo) = @_;
+
+    $repo =~ s/\/*$//;
+
+    for my $pref (prefixes($repo)) {
+	if (-l "$outdir/$pref") {
+	    system("rm '$outdir/$pref'");;
+	    return;
+	}
+    }
+
+    system("rm -rf '$outdir'/'$repo'/*");
+}
+
 package Repository;
 
 sub url {
@@ -1284,11 +1303,11 @@ sub setup_repo_links {
 }
 
 # all ancestor directories of a path
-sub prefixes {
+our sub prefixes {
     my ($path) = @_;
     my @res;
 
-    while ($path ne "") {
+    while ($path ne "" and $path ne "/") {
 	push @res, $path;
 	$path = xdirname($path);
     }
@@ -1454,8 +1473,8 @@ sub update_manifest {
 	    }
 	}
 
-	nsystem("rm -rf $outdir/head/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
-	nsystem("rm -rf $outdir/wd/" . ($repo =~ s/\/*$//r)) unless $repo =~ /^\/*$/;
+	delete_repository("$outdir/head", $repo) unless $repo =~ /^\/*$/;
+	delete_repository("$outdir/wd", $repo) unless $repo =~ /^\/*$/;
 	$dirstate->store_item($repo, {changed=>1, type=>"dir"});
 	$mdata->repositories($repo)->find_changed($dirstate);
     }
@@ -1548,8 +1567,8 @@ if ($do_new_symlinks) {
     # rm -rf dangling-symlink/ doesn't delete anything. Learn
     # something new every day.
     die if $apply_repo =~ /^\/*$/;
-    nsystem("rm -rf $outdir/head/" . ($apply_repo =~ s/\/$//r));
-    nsystem("rm -rf $outdir/wd/" . ($apply_repo =~ s/\/$//r));
+    delete_repository("$outdir/head", $apply_repo);
+    delete_repository("$outdir/wd", $apply_repo);
 }
 
 if (defined($apply) and defined($apply_repo) and
