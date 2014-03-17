@@ -1529,6 +1529,20 @@ if (defined($apply) and defined($apply_repo)) {
     check_apply($mdata_head, $apply, $apply_repo);
 }
 
+if (defined($apply_repo_name) and !defined($apply_repo)) {
+    for my $repo ($mdata_head->repos) {
+	if ($mdata_head->{repos}{$repo}->name eq $apply_repo_name) {
+	    $apply_repo = $repo;
+	    warn "found repo to apply to: $apply_repo for $apply_repo_name";
+	    last;
+	}
+    }
+
+    retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
+
+    check_apply($mdata_head, $apply, $apply_repo);
+}
+
 unless ($do_new_symlinks) {
     my @dirs = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type d -print0`);
 
@@ -1552,25 +1566,11 @@ unless ($do_new_symlinks) {
 	$file =~ s/^\.\///;
 	$file =~ s/\/*$//;
 	my $absdst = rel2abs(readlink("$outdir/head/$file"), xdirname("$outdir/head/$file"));
-	unless (begins_with($absdst, "$outdir/repo-overlay") or
-		begins_with($absdst, "$outdir/other-repositories")) {
+	unless (begins_with($absdst, "$outdir/repo-overlay/") or
+		begins_with($absdst, "$outdir/other-repositories/")) {
 	    $dirstate_head->store_item($file, {changed=>1});
 	}
     }
-}
-
-if (defined($apply_repo_name) and !defined($apply_repo)) {
-    for my $repo ($mdata_head->repos) {
-	if ($mdata_head->{repos}{$repo}->name eq $apply_repo_name) {
-	    $apply_repo = $repo;
-	    warn "found repo to apply to: $apply_repo for $apply_repo_name";
-	    last;
-	}
-    }
-
-    retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
-
-    check_apply($mdata_head, $apply, $apply_repo);
 }
 
 if ($do_new_symlinks) {
