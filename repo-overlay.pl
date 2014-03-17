@@ -651,9 +651,6 @@ sub find_changed_start {
     my ($r, $dirstate) = @_;
     my $mdata = $dirstate->{mdata};
     my $repo = $r->relpath;
-    my $head = $r->head;
-    my $oldhead = $r->{oldhead};
-    my $newhead = $r->{newhead};
 
     $dirstate->store_item($repo, { type=>"dir" });
     if (begins_with($r->master, "$pwd/")) {
@@ -662,12 +659,7 @@ sub find_changed_start {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
-    if (!defined($head)) {
-	$dirstate->store_item($repo, {changed=>1});
-	return;
-    }
-
-    $r->{pipe} = $r->gitz_start(diff => "$head", "--name-status");
+    $r->{pipe} = $r->gitz_start(status =>);
 }
 
 sub find_changed {
@@ -685,23 +677,18 @@ sub find_changed {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
-    if (!defined($head)) {
-	$dirstate->store_item($repo, {changed=>1});
-	return;
-    }
-
     my %diffstat = reverse $r->{pipe}->();
 
-    for my $path (keys %diffstat) {
-	my $stat = $diffstat{$path};
+    for my $line (keys %diffstat) {
+	my ($stat, $path) = ($line =~ /^(..) (.*)$/msg);
 
-	if ($stat eq "M") {
+	if ($stat eq " M") {
 	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
-	} elsif ($stat eq "A") {
+	} elsif ($stat eq "??") {
 	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-	} elsif ($stat eq "D") {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
-	} elsif ($stat eq "T") {
+	} elsif ($stat eq " D") {
+	    $dirstate->store_item($repo.$path, {status=>" D", changed=>1});
+	} elsif ($stat eq " T") {
 	    $dirstate->store_item($repo.$path, {status=>" T", changed=>1});
 	} else {
 	    die "$stat $path";
