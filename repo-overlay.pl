@@ -5,10 +5,10 @@ use feature 'lexical_subs';
 
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
-use Getopt::Long qw(:config auto_version auto_help);
+use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
-use Carp::Always;
+#use Carp::Always;
 
 use Git::Raw;
 
@@ -42,6 +42,42 @@ my $commit_authordate;
 my $commit_author;
 
 my $date;
+my $do_script;
+
+sub reset_options {
+    # error-prone: move to an options hash instead.
+    $do_new_versions= undef;
+    $do_new_symlinks= undef;
+    $do_print_range= undef;
+    $do_hardlink= undef;
+    $do_commit= undef;
+    $do_rebuild_tree= undef;
+    $do_emancipate= undef;
+    $do_de_emancipate= undef;
+    $do_wd = 1;
+    $do_head = 1;
+    $do_head_old = 1;
+    $do_head_new = 1;
+
+    $apply= undef;
+    $apply_repo= undef;
+    $apply_success= undef;
+    $apply_repo_name= undef;
+    $apply_last_manifest= undef;
+
+    $outdir= undef;
+    $indir = ".";
+
+    $commit_message_file= undef;
+
+    $commit_commitdate= undef;
+    $commit_committer= undef;
+    $commit_authordate= undef;
+    $commit_author= undef;
+
+    $date= undef;
+
+}
 
 GetOptions(
     "hardlink!" => \$do_hardlink,
@@ -63,30 +99,73 @@ GetOptions(
     "emancipate!" => \$do_emancipate,
     "de-emancipate!" => \$do_de_emancipate,
     "date=s" => \$date,
+    "script" => \$do_script,
     ) or die;
 
-if (defined($apply_repo)) {
-    $apply_repo =~ s/\/*$/\//;
-    $apply_repo =~ s/^\.\///;
+my $pwd;
+sub cook_options {
+    if (defined($apply_repo)) {
+	$apply_repo =~ s/\/*$/\//;
+	$apply_repo =~ s/^\.\///;
+    }
+
+    $outdir =~ s/\/*$//;
+    $indir =~ s/\/*$//;
+
+    chdir($indir) or die;
+
+    $pwd = `pwd`;
+    chomp($pwd);
+
+    if (defined($commit_commitdate) and !$do_emancipate) {
+	print "$commit_commitdate\n";
+    }
 }
 
-$outdir =~ s/\/*$//;
-$indir =~ s/\/*$//;
+if ($do_script) {
+    while (<>) {
+	chomp;
 
-chdir($indir) or die;
-
-my $pwd = `pwd`;
-chomp($pwd);
-
-if (defined($commit_commitdate) and !$do_emancipate) {
-    print "$commit_commitdate\n";
+	reset_options();
+	GetOptionsFromString(
+	    $_,
+	    "hardlink!" => \$do_hardlink,
+	    "out=s" => \$outdir,
+	    "in=s" => \$indir,
+	    "print-range!" => \$do_print_range,
+	    "new-versions!" => \$do_new_versions,
+	    "new-symlinks!" => \$do_new_symlinks,
+	    "apply=s" => \$apply,
+	    "apply-repo=s" => \$apply_repo,
+	    "apply-repo-name=s" => \$apply_repo_name,
+	    "apply-use-manifest=s" => \$apply_last_manifest,
+	    "commit!" => \$do_commit,
+	    "commit-message-file=s" => \$commit_message_file,
+	    "commit-authordate=s" => \$commit_authordate,
+	    "commit-author=s" => \$commit_author,
+	    "commit-commitdate=s" => \$commit_commitdate,
+	    "commit-committer=s" => \$commit_committer,
+	    "emancipate!" => \$do_emancipate,
+	    "de-emancipate!" => \$do_de_emancipate,
+	    "date=s" => \$date,
+	    "script" => \$do_script,
+	    ) or die;
+	cook_options();
+	eval {
+	    main();
+	};
+	#warn "$@" if defined($@);
+    }
 }
+
+cook_options();
+main();
 
 # like die, but without the dying part
 our sub retire {
     warn @_;
 
-    exit(0);
+    die "";
 }
 
 # like system(), but not the return value and echo command
@@ -633,7 +712,6 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
-use Carp::Always;
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
@@ -844,7 +922,6 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
-use Carp::Always;
 
 sub create {
     my ($item, $dirstate, $outdir) = @_;
@@ -900,7 +977,6 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
-use Carp::Always;
 
 sub mdata {
     my ($dirstate) = @_;
@@ -1027,7 +1103,7 @@ sub snapshot {
 	$r->find_siblings_and_types($dirstate);
     }
 
-    $dirstate->create_directory("$outdir");
+    $dirstate->create_directory($outdir);
 }
 
 sub new {
@@ -1052,7 +1128,6 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
-use Carp::Always;
 
 sub read_version {
     my ($mdata, $repo) = @_;
@@ -1084,7 +1159,7 @@ sub read_version {
     }
 
     $mdata->{version}{$repo} = $version->{$repo};
-    warn $version->{$repo};
+
     return $version->{$repo};
 }
 
@@ -1500,186 +1575,187 @@ sub update_manifest {
     return $new_mdata;
 }
 
--d "$outdir/head/.git" or die;
+sub main {
+    -d "$outdir/head/.git" or die;
 
-if ($do_new_versions) {
-    nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
-}
-
-if ($do_new_versions) {
-    if (defined($apply_last_manifest) && !defined($date)) {
-	my $mdate = `cd '$pwd/.repo/manifests'; git log -1 --pretty=tformat:\%ci $apply_last_manifest`;
-	chomp($mdate);
-	$date = $mdate;
+    if ($do_new_versions) {
+	nsystem("rm -rf $outdir/head/.pipcet-ro/versions/*");
     }
-    if (!defined($apply_last_manifest)) {
-	my $mm = `cd '$pwd/.repo/manifests'; git log -1 --first-parent --pretty=tformat:\%H --until='$date'`;
-	chomp($mm);
-	$apply_last_manifest = $mm;
-    }
-} else {
-    my $v = ManifestData::read_version({}, ".repo/manifests/");
 
-    $apply_last_manifest = $v;
-}
-
-my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date);
-my $dirstate_head = new DirState($mdata_head);
-
-my $mdata_head_old = new ManifestData::Head($apply_last_manifest, $date);
-my $dirstate_head_old = new DirState($mdata_head_old);
-
-my $mdata_head_new = new ManifestData::Head::New($apply_last_manifest, $date);
-my $dirstate_head_new = new DirState($mdata_head_new);
-
-if (defined($apply) and defined($apply_repo)) {
-    check_apply($mdata_head, $apply, $apply_repo);
-}
-
-if (defined($apply_repo_name) and !defined($apply_repo)) {
-    for my $repo ($mdata_head->repos) {
-	if ($mdata_head->{repos}{$repo}->name eq $apply_repo_name) {
-	    $apply_repo = $repo;
-	    warn "found repo to apply to: $apply_repo for $apply_repo_name";
-	    last;
+    if ($do_new_versions) {
+	if (defined($apply_last_manifest) && !defined($date)) {
+	    my $mdate = `cd '$pwd/.repo/manifests'; git log -1 --pretty=tformat:\%ci $apply_last_manifest`;
+	    chomp($mdate);
+	    $date = $mdate;
 	}
+	if (!defined($apply_last_manifest)) {
+	    my $mm = `cd '$pwd/.repo/manifests'; git log -1 --first-parent --pretty=tformat:\%H --until='$date'`;
+	    chomp($mm);
+	    $apply_last_manifest = $mm;
+	}
+    } else {
+	my $v = ManifestData::read_version({}, ".repo/manifests/");
+
+	$apply_last_manifest = $v;
     }
 
-    retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
+    my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date);
+    my $dirstate_head = new DirState($mdata_head);
 
-    check_apply($mdata_head, $apply, $apply_repo);
-}
+    #my $mdata_head_old = new ManifestData::Head($apply_last_manifest, $date);
+    #my $dirstate_head_old = new DirState($mdata_head_old);
 
-unless ($do_new_symlinks) {
-    my @dirs = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type d -print0`);
+    #my $mdata_head_new = new ManifestData::Head::New($apply_last_manifest, $date);
+    #my $dirstate_head_new = new DirState($mdata_head_new);
 
-    for my $dir (@dirs) {
-	$dir =~ s/^\.\///;
-	$dir =~ s/\/*$//;
-	$dirstate_head->store_item($dir, {changed=>1});
+    if (defined($apply) and defined($apply_repo)) {
+	check_apply($mdata_head, $apply, $apply_repo);
     }
 
-    my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type f -print0`);
+    if (defined($apply_repo_name) and !defined($apply_repo)) {
+	for my $repo ($mdata_head->repos) {
+	    if ($mdata_head->{repos}{$repo}->name eq $apply_repo_name) {
+		$apply_repo = $repo;
+		warn "found repo to apply to: $apply_repo for $apply_repo_name";
+		last;
+	    }
+	}
 
-    for my $file (@files) {
-	$file =~ s/^\.\///;
-	$file =~ s/\/*$//;
-	$dirstate_head->store_item($file, {changed=>1});
+	retire "couldn't find repo $apply_repo_name, aborting" unless defined($apply_repo);
+
+	check_apply($mdata_head, $apply, $apply_repo);
     }
 
-    my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type l -print0`);
+    unless ($do_new_symlinks) {
+	my @dirs = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type d -print0`);
 
-    for my $file (@files) {
-	$file =~ s/^\.\///;
-	$file =~ s/\/*$//;
-	my $absdst = rel2abs(readlink("$outdir/head/$file"), xdirname("$outdir/head/$file"));
-	unless (begins_with($absdst, "$outdir/repo-overlay/") or
-		begins_with($absdst, "$outdir/other-repositories/")) {
+	for my $dir (@dirs) {
+	    $dir =~ s/^\.\///;
+	    $dir =~ s/\/*$//;
+	    $dirstate_head->store_item($dir, {changed=>1});
+	}
+
+	my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type f -print0`);
+
+	for my $file (@files) {
+	    $file =~ s/^\.\///;
+	    $file =~ s/\/*$//;
 	    $dirstate_head->store_item($file, {changed=>1});
 	}
-    }
-}
 
-if ($do_new_symlinks) {
-} elsif (defined($apply_repo)) {
-    # rm -rf dangling-symlink/ doesn't delete anything. Learn
-    # something new every day.
-    die if $apply_repo =~ /^\/*$/;
-    delete_repository("$outdir/head", $apply_repo);
-    delete_repository("$outdir/wd", $apply_repo);
-}
+	my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type l -print0`);
 
-if (defined($apply) and defined($apply_repo) and
-    !$do_new_symlinks and !$do_new_versions) {
-    die if $mdata_head->{repos}{$apply_repo}->name eq "";
-}
-
-if ($do_new_symlinks) {
-    setup_repo_links();
-}
-
-if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
-    my $manifest = $apply_last_manifest // "HEAD";
-    my $mdata = new ManifestData::Head::New($manifest);
-    my $name = $mdata->{repos}{$apply_repo}->name;
-
-    unless (defined($name)) {
-	warn "cannot resolve repo $apply_repo (manifest $manifest)";
-	exit(0);
+	for my $file (@files) {
+	    $file =~ s/^\.\///;
+	    $file =~ s/\/*$//;
+	    my $absdst = rel2abs(readlink("$outdir/head/$file"), xdirname("$outdir/head/$file"));
+	    unless (begins_with($absdst, "$outdir/repo-overlay/") or
+		    begins_with($absdst, "$outdir/other-repositories/")) {
+		$dirstate_head->store_item($file, {changed=>1});
+	    }
+	}
     }
 
-    $apply_repo_name = $name;
-
-    warn "resolved $apply_repo to $name\n";
-
-    check_apply($mdata_head, $apply, $apply_repo);
-}
-
-if (defined($apply) and defined($apply_repo) and
-    !$do_new_symlinks and !$do_new_versions) {
-
-    if ($apply_repo eq ".repo/manifests/") {
-	$mdata_head = update_manifest($mdata_head, $dirstate_head);
-	$dirstate_head = new DirState($mdata_head);
+    if ($do_new_symlinks) {
+    } elsif (defined($apply_repo)) {
+	# rm -rf dangling-symlink/ doesn't delete anything. Learn
+	# something new every day.
+	die if $apply_repo =~ /^\/*$/;
+	delete_repository("$outdir/head", $apply_repo);
+	delete_repository("$outdir/wd", $apply_repo);
     }
 
-    $dirstate_head->snapshot("$outdir/head", $apply_repo);
-} else {
-    $dirstate_head->snapshot("$outdir/head");
-}
+    if (defined($apply) and defined($apply_repo) and
+	!$do_new_symlinks and !$do_new_versions) {
+	die if $mdata_head->{repos}{$apply_repo}->name eq "";
+    }
 
-#$dirstate_head_old->snapshot("$outdir/head-old") if $do_head_old;
-#$dirstate_head_new->snapshot("$outdir/head-new") if $do_head_new;
+    if ($do_new_symlinks) {
+	setup_repo_links();
+    }
 
-$do_wd &&= !(defined($apply) and defined($apply_repo) and
+    if (defined($apply) and defined($apply_repo) and !defined($apply_repo_name)) {
+	my $manifest = $apply_last_manifest // "HEAD";
+	my $mdata = new ManifestData::Head::New($manifest);
+	my $name = $mdata->{repos}{$apply_repo}->name;
+
+	unless (defined($name)) {
+	    retire "cannot resolve repo $apply_repo (manifest $manifest)";
+	}
+
+	$apply_repo_name = $name;
+
+	warn "resolved $apply_repo to $name\n";
+
+	check_apply($mdata_head, $apply, $apply_repo);
+    }
+
+    if (defined($apply) and defined($apply_repo) and
+	!$do_new_symlinks and !$do_new_versions) {
+
+	if ($apply_repo eq ".repo/manifests/") {
+	    $mdata_head = update_manifest($mdata_head, $dirstate_head);
+	    $dirstate_head = new DirState($mdata_head);
+	}
+
+	$dirstate_head->snapshot("$outdir/head", $apply_repo);
+    } else {
+	$dirstate_head->snapshot("$outdir/head");
+    }
+
+    #$dirstate_head_old->snapshot("$outdir/head-old") if $do_head_old;
+    #$dirstate_head_new->snapshot("$outdir/head-new") if $do_head_new;
+
+    $do_wd &&= !(defined($apply) and defined($apply_repo) and
 	     !$do_new_symlinks and !$do_new_versions);
 
-if ($do_wd) {
-    my $mdata_wd = new ManifestData::WD();
-    my $dirstate_wd = new DirState($mdata_wd);
-    $dirstate_wd->snapshot("$outdir/wd");
-}
-
-
-nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
-nsystem("ln -s $pwd $outdir/repo-overlay") or die;
-
-if ($do_commit and defined($commit_message_file)) {
-    if ($do_emancipate) {
-	nsystem("cd $outdir/head; git add --all .; git commit -m 'emancipation commit for $apply' " .
-		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : ""));
-    } else {
-	nsystem("cd $outdir/head; git commit --allow-empty -m 'COMMITTING REPO CHANGES'") if ($apply_repo eq ".repo/manifests/");
-	nsystem("cd $outdir/head; git add --all .; git commit --allow-empty -F $commit_message_file " .
-		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
-    }
-}
-
-if (($apply_success or $do_new_versions) and !$do_emancipate) {
-    for my $r ($mdata_head->repositories) {
-	my $repo = $r->relpath;
-	my $version_fh;
-	my $name = $r->name;
-	my $url = $r->url;
-	my $head;
-
-	$head = $r->head if $r->can("head");
-	my $comment;
-	$comment = $r->git(log => "-1", "$head") if $r->can("git");
-	$comment =~ s/^/# /msg;
-
-	mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
-	open $version_fh, ">$outdir/head/.pipcet-ro/versions/$repo"."version.txt";
-	print $version_fh "$repo: $head $name $url\n$comment\n";
-	close $version_fh;
+    if ($do_wd) {
+	my $mdata_wd = new ManifestData::WD();
+	my $dirstate_wd = new DirState($mdata_wd);
+	$dirstate_wd->snapshot("$outdir/wd");
     }
 
-    if ($do_commit) {
-	nsystem("cd $outdir/head; git add --all .; git commit -m 'versioning commit for $apply' " .
-		(defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
-		(defined($commit_author) ? "--author '$commit_author' " : "")) or die;
+
+    nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
+    nsystem("ln -s $pwd $outdir/repo-overlay") or die;
+
+    if ($do_commit and defined($commit_message_file)) {
+	if ($do_emancipate) {
+	    nsystem("cd $outdir/head; git add --all .; git commit -m 'emancipation commit for $apply' " .
+		    (defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
+		    (defined($commit_author) ? "--author '$commit_author' " : ""));
+	} else {
+	    nsystem("cd $outdir/head; git commit --allow-empty -m 'COMMITTING REPO CHANGES'") if ($apply_repo eq ".repo/manifests/");
+	    nsystem("cd $outdir/head; git add --all .; git commit --allow-empty -F $commit_message_file " .
+		    (defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
+		    (defined($commit_author) ? "--author '$commit_author' " : "")) or die;
+	}
+    }
+
+    if (($apply_success or $do_new_versions) and !$do_emancipate) {
+	for my $r ($mdata_head->repositories) {
+	    my $repo = $r->relpath;
+	    my $version_fh;
+	    my $name = $r->name;
+	    my $url = $r->url;
+	    my $head;
+
+	    $head = $r->head if $r->can("head");
+	    my $comment;
+	    $comment = $r->git(log => "-1", "$head") if $r->can("git");
+	    $comment =~ s/^/# /msg;
+
+	    mkdirp("$outdir/head/.pipcet-ro/versions/$repo");
+	    open $version_fh, ">$outdir/head/.pipcet-ro/versions/$repo"."version.txt";
+	    print $version_fh "$repo: $head $name $url\n$comment\n";
+	    close $version_fh;
+	}
+
+	if ($do_commit) {
+	    nsystem("cd $outdir/head; git add --all .; git commit -m 'versioning commit for $apply' " .
+		    (defined($commit_authordate) ? "--date '$commit_authordate' " : "") .
+		    (defined($commit_author) ? "--author '$commit_author' " : "")) or die;
+	}
     }
 }
 
@@ -1704,8 +1780,13 @@ if (($apply_success or $do_new_versions) and !$do_emancipate) {
 
 # perl ~/repo-tools/repo-log.pl --additional-dir=/home/pip/tmp-repo-overlay/other-repositories --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do sh -c "perl ~/repo-tools/repo-overlay.pl --commit --emancipate $REPLY --out=/home/pip/tmp-repo-overlay" && sh -c "perl ~/repo-tools/repo-overlay.pl --commit $REPLY --out=/home/pip/tmp-repo-overlay" || break; done
 
-exit(0);
-
 # Local Variables:
 # eval: (add-hook 'before-save-hook (quote whitespace-cleanup))
 # End:
+
+
+
+# pip@philadelphia:~/pipcet-cm-11.0% perl ~/repo-tools/repo-log.pl --since=January.1 --additional-dir=/home/pip/tmp-repo-overlay/other-repositories --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do (echo "--emancipate $REPLY"; echo "$REPLY";); done|perl -d:NYTProf ~/repo-tools/repo-overlay.pl --script
+# <-d:NYTProf ~/repo-tools/repo-overlay.pl --script
+# 454 repos
+#  at /home/pip/repo-tools/repo-log
