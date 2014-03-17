@@ -544,7 +544,7 @@ sub find_siblings_and_types_rec {
 	} elsif ($extmode eq "040") {
 	    $dirstate->store_item($repo.$path.$name, {type=>"dir"});
 	    $r->find_siblings_and_types_rec($dirstate, $entry->object, "$path$name/")
-		if $dirstate->changed($repo.$path);
+		if $dirstate->changed($repo.$path.$name);
 	} else {
 	    die "unknown mode $filemode";
 	}
