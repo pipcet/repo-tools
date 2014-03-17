@@ -461,14 +461,12 @@ sub find_changed {
 
 sub find_siblings_and_types_rec {
     my ($r, $dirstate, $tree, $path) = @_;
-    my $raw = $r->gitrepository;
     my $repo = $r->relpath;
 
-    for my $entry ($tree->entries) {
+    for my $entry (@{$tree->entries}) {
 	my $filemode = $entry->filemode;
 	my $name = $entry->name;
 
-	warn $name . $filemode;
 	my $extmode = substr($filemode, 0, 3);
 
 	if ($extmode eq "120") {
