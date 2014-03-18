@@ -1086,6 +1086,7 @@ my $q = Thread::Queue->new();
 
 sub snapshot {
     my ($dirstate, $outdir, @repos) = @_;
+    my $mdata = $dirstate->mdata;
 
     nsystem("rm -rf $outdir/*") unless (@repos);
     nsystem("rm -rf $outdir/.repo") unless (@repos);
@@ -1094,7 +1095,6 @@ sub snapshot {
     @repos = $dirstate->repos unless (@repos);
 
     for my $repo (@repos) {
-	my $mdata = $dirstate->mdata;
 	my $r = $mdata->repositories($repo);
 	$r->find_changed_start($dirstate);
     }
@@ -1106,39 +1106,31 @@ sub snapshot {
 	push @threads, threads->create
 	    (sub {
 		 my @res;
-		 while (defined(my $r = $q->dequeue())) {
+		 while (defined(my $repo = $q->dequeue())) {
+		     my $r = $mdata->repositories($repo);
 		     push @res, $r->find_changed($dirstate);
 		 }
-		 warn "exiting";
 		 return @res;
 	     });
     }
 
     my @changed;
     for my $repo (@repos) {
-	my $mdata = $dirstate->mdata;
 	my $r = $mdata->repositories($repo);
-	$q->enqueue($r);
+	$q->enqueue($repo);
     }
 
     $q->end();
 
     for my $thr (@threads) {
-	warn "joining $thr";
 	push @changed, $thr->join();
-	warn "joined $thr";
     }
 
     for my $file (@changed) {
-	warn "marking $file";
 	$dirstate->store_item($file, {changed=>1});
     }
 
-    warn "all changes marked";
-
-
     for my $repo (@repos) {
-	my $mdata = $dirstate->mdata;
 	my $r = $mdata->repositories($repo);
 	$r->find_siblings_and_types($dirstate);
     }
