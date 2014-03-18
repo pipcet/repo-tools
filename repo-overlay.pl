@@ -1579,6 +1579,10 @@ sub update_manifest {
     return $new_mdata;
 }
 
+my $mdata_head;
+my $dirstate_head;
+my $counter;
+
 sub main {
     -d "$outdir/head/.git" or die;
 
@@ -1603,8 +1607,10 @@ sub main {
 	$apply_last_manifest = $v;
     }
 
-    my $mdata_head = new ManifestData::Head::New($apply_last_manifest, $date);
-    my $dirstate_head = new DirState($mdata_head);
+    unless ($dirstate_head) {
+	$mdata_head = new ManifestData::Head::New($apply_last_manifest, $date);
+	$dirstate_head = new DirState($mdata_head);
+    }
 
     #my $mdata_head_old = new ManifestData::Head($apply_last_manifest, $date);
     #my $dirstate_head_old = new DirState($mdata_head_old);
@@ -1630,35 +1636,38 @@ sub main {
 	check_apply($mdata_head, $apply, $apply_repo);
     }
 
-    unless ($do_new_symlinks) {
-	my @dirs = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type d -print0`);
+    unless ($counter) {
+	unless ($do_new_symlinks) {
+	    my @dirs = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type d -print0`);
 
-	for my $dir (@dirs) {
-	    $dir =~ s/^\.\///;
-	    $dir =~ s/\/*$//;
-	    $dirstate_head->store_item($dir, {changed=>1});
-	}
+	    for my $dir (@dirs) {
+		$dir =~ s/^\.\///;
+		$dir =~ s/\/*$//;
+		$dirstate_head->store_item($dir, {changed=>1});
+	    }
 
-	my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type f -print0`);
+	    my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type f -print0`);
 
-	for my $file (@files) {
-	    $file =~ s/^\.\///;
-	    $file =~ s/\/*$//;
-	    $dirstate_head->store_item($file, {changed=>1});
-	}
-
-	my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type l -print0`);
-
-	for my $file (@files) {
-	    $file =~ s/^\.\///;
-	    $file =~ s/\/*$//;
-	    my $absdst = rel2abs(readlink("$outdir/head/$file"), xdirname("$outdir/head/$file"));
-	    unless (begins_with($absdst, "$outdir/repo-overlay/") or
-		    begins_with($absdst, "$outdir/other-repositories/")) {
+	    for my $file (@files) {
+		$file =~ s/^\.\///;
+		$file =~ s/\/*$//;
 		$dirstate_head->store_item($file, {changed=>1});
+	    }
+
+	    my @files = split(/\0/, `cd '$outdir/head'; find -name .git -prune -o -type l -print0`);
+
+	    for my $file (@files) {
+		$file =~ s/^\.\///;
+		$file =~ s/\/*$//;
+		my $absdst = rel2abs(readlink("$outdir/head/$file"), xdirname("$outdir/head/$file"));
+		unless (begins_with($absdst, "$outdir/repo-overlay/") or
+			begins_with($absdst, "$outdir/other-repositories/")) {
+		    $dirstate_head->store_item($file, {changed=>1});
+		}
 	    }
 	}
     }
+    $counter++;
 
     if ($do_new_symlinks) {
     } elsif (defined($apply_repo)) {
