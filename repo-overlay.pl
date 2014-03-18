@@ -154,12 +154,12 @@ if ($do_script) {
 	eval {
 	    main();
 	};
-	#warn "$@" if defined($@);
+	warn "$@" if defined($@);
     }
+} else {
+    cook_options();
+    main();
 }
-
-cook_options();
-main();
 
 # like die, but without the dying part
 our sub retire {
