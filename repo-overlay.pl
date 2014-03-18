@@ -154,7 +154,7 @@ if ($do_script) {
 	eval {
 	    main();
 	};
-	warn "$@" if defined($@);
+	warn "$@" if $@ ne "" and $@ !~ /^success/;
     }
 } else {
     cook_options();
@@ -163,7 +163,7 @@ if ($do_script) {
 
 # like die, but without the dying part
 our sub retire {
-    warn @_;
+    # warn @_;
 
     die @_;
 }
@@ -1465,7 +1465,7 @@ sub check_apply {
     }
 
     if ($r->git_ancestor($apply, $r->version)) {
-	retire "already applied $apply";
+	retire "success";
     }
 
     if (!defined($r->revparse($apply))) {
