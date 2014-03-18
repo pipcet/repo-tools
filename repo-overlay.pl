@@ -3,12 +3,16 @@ use strict;
 no warnings "experimental::lexical_subs";
 use feature 'lexical_subs';
 
+use threads qw(stringify);
+use threads::shared;
+use Thread::Queue;
+
 use File::Basename qw(dirname);
 use File::Path qw(make_path);
 use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
-#use Carp::Always;
+use Carp::Always;
 
 use Git::Raw;
 
@@ -151,10 +155,10 @@ if ($do_script) {
 	    "script" => \$do_script,
 	    ) or die;
 	cook_options();
-	eval {
+	#eval {
 	    main();
-	};
-	warn "$@" if $@ ne "" and $@ !~ /^success/;
+	#};
+	warn "$@";
     }
 } else {
     cook_options();
@@ -334,7 +338,7 @@ sub gitpath {
 sub version {
     my ($r) = @_;
 
-    return $r->{version}->();
+    return $r->{version};
 }
 
 sub revparse {
@@ -548,7 +552,7 @@ sub find_changed_start {
 	return;
     }
 
-    $r->{pipe} = $r->gitz_start(diff => "$head", "--name-status");
+    $r->{pipe} = [$r->gitz_start(diff => "$head", "--name-status")->()];
 }
 
 sub find_changed {
@@ -559,31 +563,28 @@ sub find_changed {
     my $oldhead = $r->{oldhead};
     my $newhead = $r->{newhead};
 
-    $dirstate->store_item($repo, { type=>"dir" });
+    my @res;
+
     if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(xdirname($repo), {type=>"dir"});
     } else {
-	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+	push @res, xdirname($repo);
     }
 
     if (!defined($head)) {
-	$dirstate->store_item($repo, {changed=>1});
-	return;
+	push @res, $repo;
+	return @res;
     }
 
-    my %diffstat = reverse $r->{pipe}->();
+    my %diffstat = reverse @{$r->{pipe}};
 
     for my $path (keys %diffstat) {
+	push @res, $path;
 	my $stat = $diffstat{$path};
 
 	if ($stat eq "M") {
-	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
 	} elsif ($stat eq "A") {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
 	} elsif ($stat eq "D") {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
 	} elsif ($stat eq "T") {
-	    $dirstate->store_item($repo.$path, {status=>" T", changed=>1});
 	} else {
 	    die "$stat $path";
 	}
@@ -593,21 +594,20 @@ sub find_changed {
 	my %diffstat = reverse $r->gitz(diff => "$oldhead..$newhead", "--name-status");
 
 	for my $path (keys %diffstat) {
+	    push @res, $path;
 	    my $stat = $diffstat{$path};
 
 	    if ($stat eq "M") {
-		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
 	    } elsif ($stat eq "A") {
-		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
 	    } elsif ($stat eq "D") {
-		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
 	    } elsif ($stat eq "T") {
-		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
 	    } else {
 		die "$stat $path";
 	    }
 	}
     }
+
+    return @res;
 }
 
 sub find_siblings_and_types_rec {
@@ -763,7 +763,7 @@ sub find_changed_start {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
-    $r->{pipe} = $r->gitz_start(status =>);
+    $r->{pipe} = [$r->gitz_start(status =>)->()];
 }
 
 sub find_changed {
@@ -774,26 +774,24 @@ sub find_changed {
     my $oldhead = $r->{oldhead};
     my $newhead = $r->{newhead};
 
-    $dirstate->store_item($repo, { type=>"dir" });
+    my @res;
+
     if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(xdirname($repo), {type=>"dir"});
     } else {
-	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+	push @res, xdirname($repo);
     }
 
-    my @stat = $r->{pipe}->();
+    my @stat = @{$r->{pipe}};
 
     for my $line (@stat) {
 	my ($stat, $path) = ($line =~ /^(..) (.*)$/msg);
 
+	push @res, $path;
+
 	if ($stat eq " M") {
-	    $dirstate->store_item($repo.$path, {status=>" M", changed=>1});
 	} elsif ($stat eq "??") {
-	    $dirstate->store_item($repo.$path, {status=>"??", changed=>1});
 	} elsif ($stat eq " D") {
-	    $dirstate->store_item($repo.$path, {status=>" D", changed=>1});
 	} elsif ($stat eq " T") {
-	    $dirstate->store_item($repo.$path, {status=>" T", changed=>1});
 	} else {
 	    die "$stat $path";
 	}
@@ -803,21 +801,21 @@ sub find_changed {
 	my %diffstat = reverse $r->gitz(diff => "$oldhead..$newhead", "--name-status");
 
 	for my $path (keys %diffstat) {
+	    push @res, $path;
+
 	    my $stat = $diffstat{$path};
 
 	    if ($stat eq "M") {
-		$dirstate->store_item($repo.$path, {status=>" M", changed=>1});
 	    } elsif ($stat eq "A") {
-		$dirstate->store_item($repo.$path, {status=>"??", changed=>1});
 	    } elsif ($stat eq "D") {
-		$dirstate->store_item($repo.$path, {status=>" D", changed=>1});
 	    } elsif ($stat eq "T") {
-		$dirstate->store_item($repo.$path, {status=>" T", changed=>1});
 	    } else {
 		die "$stat $path";
 	    }
 	}
     }
+
+    return @res;
 }
 
 sub create_file {
@@ -859,6 +857,8 @@ sub find_changed {
     my ($r, $dirstate, $path) = @_;
     my $pwd = $r->{pwd};
 
+    my @res;
+
     my $dh;
     opendir $dh, "$pwd/$path" or die;
     my @files = readdir $dh;
@@ -870,12 +870,14 @@ sub find_changed {
 
     for my $file (@files) {
 	next if ($dirstate->mdata->{repos}{$file . "/"});
-	$dirstate->store_item($file, {changed => 1})
+	push @res, $file
 	    unless -d "$pwd/$file";
 	if (-d "$pwd/$file" and !-d "$pwd/$file/.git") {
-	    $r->find_changed($dirstate, "$file/");
+	    push @res, $r->find_changed($dirstate, "$file/");
 	}
     }
+
+    return @res;
 }
 
 sub find_siblings_and_types {
@@ -1080,6 +1082,8 @@ sub create_directory {
     }
 }
 
+my $q = Thread::Queue->new();
+
 sub snapshot {
     my ($dirstate, $outdir, @repos) = @_;
 
@@ -1095,11 +1099,43 @@ sub snapshot {
 	$r->find_changed_start($dirstate);
     }
 
+    $q = Thread::Queue->new();
+
+    my @threads;
+    for (0..5) {
+	push @threads, threads->create
+	    (sub {
+		 my @res;
+		 while (defined(my $r = $q->dequeue())) {
+		     push @res, $r->find_changed($dirstate);
+		 }
+		 warn "exiting";
+		 return @res;
+	     });
+    }
+
+    my @changed;
     for my $repo (@repos) {
 	my $mdata = $dirstate->mdata;
 	my $r = $mdata->repositories($repo);
-	$r->find_changed($dirstate);
+	$q->enqueue($r);
     }
+
+    $q->end();
+
+    for my $thr (@threads) {
+	warn "joining $thr";
+	push @changed, $thr->join();
+	warn "joined $thr";
+    }
+
+    for my $file (@changed) {
+	warn "marking $file";
+	$dirstate->store_item($file, {changed=>1});
+    }
+
+    warn "all changes marked";
+
 
     for my $repo (@repos) {
 	my $mdata = $dirstate->mdata;
@@ -1270,7 +1306,7 @@ sub new {
 	my ($repopath, $name, $url, $branchref) = @$r;
 	$mdata->new_repository($repopath, $name, $url,
 			       "$repos_by_name_dir/$name/repo",
-			       $date, sub { $mdata->read_version($repopath) });
+			       $date, $mdata->read_version($repopath));
     }
 
     {
@@ -1278,7 +1314,7 @@ sub new {
 
 	$mdata->new_repository($repopath, ".repo/repo", "",
 			   "$repos_by_name_dir/.repo/repo/repo",
-			       $date, sub { $mdata->read_version($repopath) });
+			       $date, $mdata->read_version($repopath));
     }
 
     {
@@ -1286,7 +1322,7 @@ sub new {
 
 	$mdata->new_repository($repopath, ".repo/manifests", "",
 			       "$repos_by_name_dir/.repo/manifests/repo",
-			       $date, sub { $mdata->read_version($repopath) });
+			       $date, $mdata->read_version($repopath));
     }
 
     $mdata->{repos}{"/"} = new Repository::WD($pwd);
@@ -1347,7 +1383,7 @@ sub new {
 	my ($repopath, $name, $url, $branchref) = @$r;
 	$mdata->new_repository($repopath, $name, $url,
 			       "$repos_by_name_dir/$name/repo",
-			       $date, sub { $mdata->read_version($repopath) });
+			       $date, $mdata->read_version($repopath));
     }
 
     {
@@ -1355,7 +1391,7 @@ sub new {
 
 	$mdata->new_repository($repopath, ".repo/repo", "",
 			   "$repos_by_name_dir/.repo/repo/repo",
-			       $date, sub { $mdata->read_version($repopath) });
+			       $date, $mdata->read_version($repopath));
     }
 
     {
@@ -1363,7 +1399,7 @@ sub new {
 
 	$mdata->new_repository($repopath, ".repo/manifests", "",
 			       "$repos_by_name_dir/.repo/manifests/repo",
-			       $date, sub { $mdata->read_version($repopath) });
+			       $date, $mdata->read_version($repopath));
     }
 
     $mdata->{repos}{"/"} = new Repository::WD($pwd);
