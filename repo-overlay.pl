@@ -1460,6 +1460,10 @@ sub check_apply {
 	retire "no repo for $repo, aborting";
     }
 
+    if ($r->git_ancestor($apply, $r->version)) {
+	retire "already applied $apply";
+    }
+
     if (!defined($r->revparse($apply))) {
 	die "commit $apply isn't in $repo.";
     }
@@ -1470,10 +1474,6 @@ sub check_apply {
     } elsif (grep { $_ eq $r->version } $r->git_parents($apply)) {
 	warn "should be able to apply commit $apply to $apply_repo.";
 	return;
-    }
-
-    if ($r->git_ancestor($apply, $r->version)) {
-	retire "already applied $apply";
     }
 
     my $msg = "cannot apply commit $apply to $repo @" . $r->version . " != " . $r->revparse($apply . "^") . "\n";
