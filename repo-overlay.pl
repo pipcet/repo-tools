@@ -1110,7 +1110,7 @@ sub snapshot {
     $q = Thread::Queue->new();
 
     my @threads;
-    for (0..5) {
+    for (0..7) {
 	push @threads, threads->create
 	    (sub {
 		 my @res;
