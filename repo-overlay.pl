@@ -578,7 +578,7 @@ sub find_changed {
     my %diffstat = reverse @{$r->{pipe}};
 
     for my $path (keys %diffstat) {
-	push @res, $path;
+	push @res, $repo.$path;
 	my $stat = $diffstat{$path};
 
 	if ($stat eq "M") {
@@ -786,7 +786,7 @@ sub find_changed {
     for my $line (@stat) {
 	my ($stat, $path) = ($line =~ /^(..) (.*)$/msg);
 
-	push @res, $path;
+	push @res, $repo.$path;
 
 	if ($stat eq " M") {
 	} elsif ($stat eq "??") {
