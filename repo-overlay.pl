@@ -165,7 +165,7 @@ if ($do_script) {
 our sub retire {
     warn @_;
 
-    die "";
+    die @_;
 }
 
 # like system(), but not the return value and echo command
