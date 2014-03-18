@@ -314,6 +314,8 @@ sub master {
 package Repository::Git;
 use parent -norequire, "Repository";
 
+use threads::shared;
+
 sub gitpath {
     my ($r) = @_;
     my $gitpath = $r->{gitpath};
@@ -441,6 +443,8 @@ sub gitrawtree {
 
     my $tree = $head->tree;
 
+    share($tree);
+
     return ($r->{gitrawtree} = $tree);
 }
 
@@ -449,7 +453,11 @@ sub gitrepository {
 
     return $r->{gitrepository} if exists($r->{gitrepository});
 
-    return ($r->{gitrepository} = Git::Raw::Repository->open($r->gitpath));
+    $r->{gitrepository} = Git::Raw::Repository->open($r->gitpath);
+
+    share($r->{gitrepository});
+
+    return $r->{gitrepository};
 }
 
 sub git {
