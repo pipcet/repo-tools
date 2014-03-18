@@ -1720,14 +1720,13 @@ sub main {
     #$dirstate_head_new->snapshot("$outdir/head-new") if $do_head_new;
 
     $do_wd &&= !(defined($apply) and defined($apply_repo) and
-	     !$do_new_symlinks and !$do_new_versions);
+		 !$do_new_symlinks and !$do_new_versions);
 
     if ($do_wd) {
 	my $mdata_wd = new ManifestData::WD();
 	my $dirstate_wd = new DirState($mdata_wd);
 	$dirstate_wd->snapshot("$outdir/wd");
     }
-
 
     nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
     nsystem("ln -s $pwd $outdir/repo-overlay") or die;
@@ -1803,3 +1802,7 @@ sub main {
 # <-d:NYTProf ~/repo-tools/repo-overlay.pl --script
 # 454 repos
 #  at /home/pip/repo-tools/repo-log
+
+#perl ~/repo-tools/repo-log.pl --since=January.1 --additional-dir=/home/pip/tmp-repo-overlay/other-repositories --just-shas --commit-dir=/home/pip/tmp-repo-overlay/commits|tac|while read; do echo "--emancipate --out=/home/pip/tmp-repo-overlay $REPLY"; echo "--out=/home/pip/tmp-repo-overlay $REPLY"; done|perl -d:NYTProf ~/repo-tools/repo-overlay.pl --script
+
+#export NYTPROF=sigexit=1:addpid=1:file=/home/pip/nytprof/nytprof.out
