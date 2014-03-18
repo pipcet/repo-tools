@@ -257,7 +257,11 @@ our sub delete_repository {
 	}
     }
 
-    system("rm -rf '$outdir'/'$repo'/*");
+    if (-l "$outdir/$repo") {
+	system("rm '$outdir'/'$repo'");
+    } else {
+	system("rm -r '$outdir'/'$repo'/*");
+    }
 }
 
 package Repository;
