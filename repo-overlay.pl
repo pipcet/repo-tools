@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 use strict;
+use warnings "threads";
 no warnings "experimental::lexical_subs";
 use feature 'lexical_subs';
 
