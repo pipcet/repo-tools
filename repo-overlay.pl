@@ -49,6 +49,8 @@ my $commit_author;
 my $date;
 my $do_script;
 
+my $nthreads=4;
+
 sub reset_options {
     # error-prone: move to an options hash instead.
     $do_new_versions= undef;
@@ -105,6 +107,7 @@ GetOptions(
     "de-emancipate!" => \$do_de_emancipate,
     "date=s" => \$date,
     "script" => \$do_script,
+    "threads=i" => \$nthreads,
     ) or die;
 
 my $pwd;
@@ -541,6 +544,8 @@ use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 
+use threads::shared;
+
 sub find_changed_start {
     my ($r, $dirstate) = @_;
     my $mdata = $dirstate->{mdata};
@@ -622,6 +627,7 @@ sub find_changed {
 sub find_siblings_and_types_rec {
     my ($r, $dirstate, $tree, $path) = @_;
     my $repo = $r->relpath;
+    my @res;
 
     for my $entry (@{$tree->entries}) {
 	my $filemode = $entry->filemode;
@@ -630,24 +636,28 @@ sub find_siblings_and_types_rec {
 	my $extmode = substr($filemode, 0, 3);
 
 	if ($extmode eq "120") {
-	    $dirstate->store_item($repo.$path.$name, {type=>"link"});
+	    push @res, [$repo.$path.$name, "link"];
 	} elsif ($extmode eq "100") {
-	    $dirstate->store_item($repo.$path.$name, {type=>"file"});
+	    push @res, [$repo.$path.$name, "file"];
 	} elsif ($extmode eq "040") {
-	    $dirstate->store_item($repo.$path.$name, {type=>"dir"});
-	    $r->find_siblings_and_types_rec($dirstate, $entry->object, "$path$name/")
+	    push @res, [$repo.$path.$name, "dir"];
+	    my $subtree = $entry->object;
+	    share($subtree);
+	    push @res, $r->find_siblings_and_types_rec($dirstate, $subtree, "$path$name/")
 		if $dirstate->changed($repo.$path.$name);
 	} else {
 	    die "unknown mode $filemode";
 	}
     }
+
+    return @res;
 }
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     my $tree = $r->gitrawtree;
 
-    $r->find_siblings_and_types_rec($dirstate, $tree, "");
+    return $r->find_siblings_and_types_rec($dirstate, $tree, "");
 }
 
 sub create_file {
@@ -730,6 +740,7 @@ sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     $path //= $r->relpath;
     my $mdata = $dirstate->{mdata};
+    my @res;
 
     my $dh;
     opendir $dh, "$pwd/$path" or die;
@@ -743,21 +754,24 @@ sub find_siblings_and_types {
     for my $file (@files) {
 	next if $mdata->{repos}{$file . "/"};
 	if (-l "$pwd/$file") {
-	    $dirstate->store_item($file, {type=>"link"});
+	    push @res, [$file, "link"];
 	} elsif (!-e "$pwd/$file") {
+	    push @res, [$file, "none"];
 	    $dirstate->store_item($file, {type=>"none"});
 	} elsif (-d "$pwd/$file") {
 	    if (!-d "$pwd/$file/.git") {
-		$dirstate->store_item($file, {type=>"dir"});
-		$r->find_siblings_and_types($dirstate, "$file/")
+		push @res, [$file, "dir"];
+		push @res, $r->find_siblings_and_types($dirstate, "$file/")
 		    if $dirstate->changed($file);
 	    }
 	} elsif (-f "$pwd/$file") {
-	    $dirstate->store_item($file, {type=>"file"});
+	    push @res, [$file, "file"];
 	} else {
 	    die;
 	}
     }
+
+    return @res;
 }
 
 sub find_changed_start {
@@ -893,6 +907,8 @@ sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
     my $pwd = $r->{pwd};
 
+    my @res;
+
     my $dh;
     opendir $dh, "$pwd/$path" or die;
     my @files = readdir $dh;
@@ -905,21 +921,23 @@ sub find_siblings_and_types {
     for my $file (@files) {
 	next if ($dirstate->mdata->{repos}{$file . "/"});
 	if (-l "$pwd/$file") {
-	    $dirstate->store_item($file, {type=>"link"});
+	    push @res, [$file, "link"];
 	} elsif (!-e "$pwd/$file") {
-	    $dirstate->store_item($file, {type=>"none"});
+	    push @res, [$file, "none"];
 	} elsif (-d "$pwd/$file") {
 	    if (!-d "$pwd/$file/.git") {
-		$dirstate->store_item($file, {type=>"dir"});
-		$r->find_siblings_and_types($dirstate, "$file/")
+		push @res, [$file, "dir"];
+		push @res, $r->find_siblings_and_types($dirstate, "$file/")
 		    if $dirstate->changed($file);
 	    }
 	} elsif (-f "$pwd/$file") {
-	    $dirstate->store_item($file, {type=>"file"});
+	    push @res, [$file, "file"];
 	} else {
 	    die;
 	}
     }
+
+    return @res;
 }
 
 sub new {
@@ -1110,17 +1128,31 @@ sub snapshot {
 
     $q = Thread::Queue->new();
 
+    my @meta_threads;
+    # LoL of threads
     my @threads;
-    for (0..7) {
-	push @threads, threads->create
-	    (sub {
-		 my @res;
-		 while (defined(my $repo = $q->dequeue())) {
-		     my $r = $mdata->repositories($repo);
-		     push @res, $r->find_changed($dirstate);
-		 }
-		 return @res;
-	     });
+    for (0..$nthreads-1) {
+	push @meta_threads, threads->create(sub {
+	    my @threads;
+
+	    for (0..$nthreads-1) {
+		push @threads, threads->create(sub {
+		    my @res;
+		    while (defined(my $repo = $q->dequeue())) {
+			my $r = $mdata->repositories($repo);
+			push @res, $r->find_changed($dirstate);
+		    }
+		    return @res;
+					       });
+	    }
+
+	    return @threads;
+
+					    });
+    }
+
+    for my $thr (@meta_threads) {
+	push @threads, $thr->join;
     }
 
     my @changed;
@@ -1139,9 +1171,49 @@ sub snapshot {
 	$dirstate->store_item($file, {changed=>1});
     }
 
+    $q = Thread::Queue->new();
+
+    my @meta_threads;
+    # LoL of threads
+    my @threads;
+    for (0..$nthreads-1) {
+	push @meta_threads, threads->create(sub {
+	    my @threads;
+
+	    for (0..$nthreads-1) {
+		push @threads, threads->create(sub {
+		    my @res;
+		    while (defined(my $repo = $q->dequeue())) {
+			my $r = $mdata->repositories($repo);
+			push @res, $r->find_siblings_and_types($dirstate);
+		    }
+		    return @res;
+					       });
+	    }
+
+	    return @threads;
+
+					    });
+    }
+
+    for my $thr (@meta_threads) {
+	push @threads, $thr->join;
+    }
+
     for my $repo (@repos) {
-	my $r = $mdata->repositories($repo);
-	$r->find_siblings_and_types($dirstate);
+	$q->enqueue($repo);
+    }
+
+    $q->end;
+
+    my @types;
+    for my $thr (@threads) {
+	push @types, $thr->join();
+    }
+
+    for my $typeentry (@types) {
+	my ($file, $type) = @$typeentry;
+	$dirstate->store_item($file, {type => $type});
     }
 
     $dirstate->create_directory($outdir);
