@@ -1111,6 +1111,38 @@ sub create_directory {
 
 my $q = Thread::Queue->new();
 
+sub collect {
+    my ($code, @repos) = @_;
+    my $q = Thread::Queue->new();
+    my @threads;
+    my @res;
+
+    for (0..$nthreads-1) {
+	push @threads, threads->create(sub {
+	    my @res;
+
+	    while (defined(my $repo = $q->dequeue)) {
+		push @res, $code->($repo);
+	    }
+
+	    return @res;
+
+			})
+    }
+
+    for my $repo (@repos) {
+	$q->enqueue($repo);
+    }
+
+    $q->end;
+
+    for my $thr (@threads) {
+	push @res, $thr->join;
+    }
+
+    return @res;
+}
+
 sub snapshot {
     my ($dirstate, $outdir, @repos) = @_;
     my $mdata = $dirstate->mdata;
@@ -1121,95 +1153,29 @@ sub snapshot {
 
     @repos = $dirstate->repos unless (@repos);
 
+    collect(sub {
+	my $r = $mdata->repositories($_[0]);
+	$r->head if $r->can("head");
+	    }, @repos);
+
     for my $repo (@repos) {
 	my $r = $mdata->repositories($repo);
 	$r->find_changed_start($dirstate);
     }
 
-    $q = Thread::Queue->new();
-
-    my @meta_threads;
-    # LoL of threads
-    my @threads;
-    for (0..$nthreads-1) {
-	push @meta_threads, threads->create(sub {
-	    my @threads;
-
-	    for (0..$nthreads-1) {
-		push @threads, threads->create(sub {
-		    my @res;
-		    while (defined(my $repo = $q->dequeue())) {
-			my $r = $mdata->repositories($repo);
-			push @res, $r->find_changed($dirstate);
-		    }
-		    return @res;
-					       });
-	    }
-
-	    return @threads;
-
-					    });
-    }
-
-    for my $thr (@meta_threads) {
-	push @threads, $thr->join;
-    }
-
-    my @changed;
-    for my $repo (@repos) {
-	my $r = $mdata->repositories($repo);
-	$q->enqueue($repo);
-    }
-
-    $q->end();
-
-    for my $thr (@threads) {
-	push @changed, $thr->join();
-    }
+    my @changed = collect(sub {
+	my $r = $mdata->repositories($_[0]);
+	$r->find_changed($dirstate);
+	    }, @repos);
 
     for my $file (@changed) {
 	$dirstate->store_item($file, {changed=>1});
     }
 
-    $q = Thread::Queue->new();
-
-    my @meta_threads;
-    # LoL of threads
-    my @threads;
-    for (0..$nthreads-1) {
-	push @meta_threads, threads->create(sub {
-	    my @threads;
-
-	    for (0..$nthreads-1) {
-		push @threads, threads->create(sub {
-		    my @res;
-		    while (defined(my $repo = $q->dequeue())) {
-			my $r = $mdata->repositories($repo);
-			push @res, $r->find_siblings_and_types($dirstate);
-		    }
-		    return @res;
-					       });
-	    }
-
-	    return @threads;
-
-					    });
-    }
-
-    for my $thr (@meta_threads) {
-	push @threads, $thr->join;
-    }
-
-    for my $repo (@repos) {
-	$q->enqueue($repo);
-    }
-
-    $q->end;
-
-    my @types;
-    for my $thr (@threads) {
-	push @types, $thr->join();
-    }
+    my @types = collect(sub {
+	my $r = $mdata->repositories($_[0]);
+	return $r->find_siblings_and_types($dirstate);
+	    }, @repos);
 
     for my $typeentry (@types) {
 	my ($file, $type) = @$typeentry;
