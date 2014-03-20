@@ -445,11 +445,9 @@ sub gitrawtree {
 
     $head = $head->target while $head->isa("Git::Raw::Reference");
 
-    my $tree = $head->tree;
+    $r->{gitrawtree} = share($head->tree);
 
-    share($tree);
-
-    return ($r->{gitrawtree} = $tree);
+    return $r->{gitrawtree};
 }
 
 sub gitrepository {
@@ -457,9 +455,7 @@ sub gitrepository {
 
     return $r->{gitrepository} if exists($r->{gitrepository});
 
-    $r->{gitrepository} = Git::Raw::Repository->open($r->gitpath);
-
-    share($r->{gitrepository});
+    $r->{gitrepository} = share(Git::Raw::Repository->open($r->gitpath));
 
     return $r->{gitrepository};
 }
@@ -566,7 +562,7 @@ sub find_changed_start {
 	return;
     }
 
-    $r->{pipe} = [$r->gitz_start(diff => "$head", "--name-status")->()];
+    $r->{pipe} = shared_clone([$r->gitz_start(diff => "$head", "--name-status")->()]);
 }
 
 sub find_changed {
@@ -642,7 +638,6 @@ sub find_siblings_and_types_rec {
 	} elsif ($extmode eq "040") {
 	    push @res, [$repo.$path.$name, "dir"];
 	    my $subtree = $entry->object;
-	    share($subtree);
 	    push @res, $r->find_siblings_and_types_rec($dirstate, $subtree, "$path$name/")
 		if $dirstate->changed($repo.$path.$name);
 	} else {
@@ -1011,6 +1006,8 @@ use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 
+use threads::shared;
+
 sub mdata {
     my ($dirstate) = @_;
 
@@ -1208,6 +1205,8 @@ use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 
+use threads::shared;
+
 sub read_version {
     my ($mdata, $repo) = @_;
 
@@ -1295,12 +1294,16 @@ sub repos {
 sub new_repository {
     my ($mdata, $repopath, @args) = @_;
 
+    $mdata->{repos} //= {};
+
     $mdata->{repos}{$repopath} =
 	$mdata->repository_class->new($repopath, @args);
 }
 
 package ManifestData::Head;
 use parent -norequire, "ManifestData";
+
+use threads::shared;
 
 sub repository_class {
     return "Repository::Git::Head";
@@ -1309,7 +1312,7 @@ sub repository_class {
 sub new {
     my ($class, $version, $date) = @_;
     my $repos_by_name_dir = "$outdir/repos-by-name";
-    my $mdata = bless {}, $class;
+    my $mdata = bless({}, $class);
 
     $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
@@ -1352,7 +1355,7 @@ sub new {
 	my $repopath = ".repo/repo/";
 
 	$mdata->new_repository($repopath, ".repo/repo", "",
-			   "$repos_by_name_dir/.repo/repo/repo",
+			       "$repos_by_name_dir/.repo/repo/repo",
 			       $date, $mdata->read_version($repopath));
     }
 
