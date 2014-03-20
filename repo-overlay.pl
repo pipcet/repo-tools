@@ -274,6 +274,9 @@ our sub delete_repository {
 
 package Repository;
 
+use threads qw(stringify);
+use threads::shared;
+
 sub url {
     my ($r) = @_;
 
@@ -318,6 +321,8 @@ sub master {
 package Repository::Git;
 use parent -norequire, "Repository";
 
+use threads::shared;
+use threads qw(stringify);
 use threads::shared;
 
 sub gitpath {
@@ -435,6 +440,9 @@ sub head {
     return $head;
 }
 
+use Data::Dumper;
+use Devel::Peek;
+
 sub gitrawtree {
     my ($r) = @_;
 
@@ -445,9 +453,7 @@ sub gitrawtree {
 
     $head = $head->target while $head->isa("Git::Raw::Reference");
 
-    $r->{gitrawtree} = share($head->tree);
-
-    return $r->{gitrawtree};
+    return $head->tree;
 }
 
 sub gitrepository {
@@ -517,16 +523,22 @@ sub git_ancestor {
     return $r->gitp("merge-base", "--is-ancestor", $a, $b);
 }
 
+use Devel::Peek;
+
 sub new {
     my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
     my $r = bless {}, $class;
+
+    $r = shared_clone($r);
+
+    bless $r, $class;
 
     $r->{relpath} = $path;
     $r->{name} = $name;
     $r->{url} = $url;
     $r->{gitpath} = $gitpath;
     $r->{date} = $date;
-    $r->{version} = $version;
+    $r->{version} = $version if defined $version;
 
     return $r;
 }
@@ -539,6 +551,8 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
+use threads qw(stringify);
+use threads::shared;
 
 use threads::shared;
 
@@ -620,6 +634,8 @@ sub find_changed {
     return @res;
 }
 
+use Data::Dumper;
+
 sub find_siblings_and_types_rec {
     my ($r, $dirstate, $tree, $path) = @_;
     my $repo = $r->relpath;
@@ -687,6 +703,8 @@ sub create_link {
 }
 
 package Repository::Git::Head::New;
+use threads qw(stringify);
+use threads::shared;
 use parent -norequire, "Repository::Git::Head";
 
 sub head {
@@ -730,6 +748,9 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
+
+use threads qw(stringify);
+use threads::shared;
 
 sub find_siblings_and_types {
     my ($r, $dirstate, $path) = @_;
@@ -781,7 +802,7 @@ sub find_changed_start {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
-    $r->{pipe} = [$r->gitz_start(status =>)->()];
+    $r->{pipe} = shared_clone([$r->gitz_start(status =>)->()]);
 }
 
 sub find_changed {
@@ -852,6 +873,9 @@ sub create_link {
 
 package Repository::WD;
 use parent -norequire, "Repository";
+
+use threads qw(stringify);
+use threads::shared;
 
 sub create_file {
     my ($r, $file, $dst) = @_;
@@ -950,6 +974,9 @@ use File::Path qw(make_path);
 use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
+
+use threads qw(stringify);
+use threads::shared;
 
 sub create {
     my ($item, $dirstate, $outdir) = @_;
@@ -1286,13 +1313,13 @@ sub repositories {
 sub repos {
     my ($mdata) = @_;
 
-    return sort keys %{$mdata->{repos}};
+    die unless $mdata->{repos};
+
+    return keys %{$mdata->{repos}};
 }
 
 sub new_repository {
     my ($mdata, $repopath, @args) = @_;
-
-    $mdata->{repos} //= {};
 
     $mdata->{repos}{$repopath} =
 	$mdata->repository_class->new($repopath, @args);
@@ -1300,6 +1327,9 @@ sub new_repository {
 
 package ManifestData::Head;
 use parent -norequire, "ManifestData";
+
+use threads qw(stringify);
+use threads::shared;
 
 use threads::shared;
 
@@ -1365,7 +1395,7 @@ sub new {
 			       $date, $mdata->read_version($repopath));
     }
 
-    $mdata->{repos}{"/"} = new Repository::WD($pwd);
+    $mdata->{repos}{"/"} = shared_clone(new Repository::WD($pwd));
 
     return $mdata;
 }
@@ -1373,12 +1403,17 @@ sub new {
 package ManifestData::Head::New;
 use parent -norequire, "ManifestData::Head";
 
+use threads qw(stringify);
+use threads::shared;
+
 sub repository_class {
     return "Repository::Git::Head::New";
 }
 
 package ManifestData::WD;
 use parent -norequire, "ManifestData";
+use threads qw(stringify);
+use threads::shared;
 
 sub repository_class {
     return "Repository::Git::WD";
@@ -1391,6 +1426,7 @@ sub new {
 
     $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
+    $mdata->{repos} = shared_clone({});
 
     if (!defined($version)) {
 	if (defined($date)) {
@@ -1442,12 +1478,15 @@ sub new {
 			       $date, $mdata->read_version($repopath));
     }
 
-    $mdata->{repos}{"/"} = new Repository::WD($pwd);
+    $mdata->{repos}{"/"} = shared_clone(new Repository::WD($pwd));
 
     return $mdata;
 }
 
 package main;
+
+use threads qw(stringify);
+use threads::shared;
 
 sub setup_repo_links {
     my $head_mdata = ManifestData::Head::New->new();
