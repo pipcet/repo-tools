@@ -1106,8 +1106,6 @@ sub create_directory {
     }
 }
 
-my $q = Thread::Queue->new();
-
 sub collect {
     my ($code, @repos) = @_;
     my $q = Thread::Queue->new();
@@ -1115,7 +1113,7 @@ sub collect {
     my @res;
 
     for (0..$nthreads-1) {
-	push @threads, threads->create(sub {
+	push @threads, threads->create({context=>"list"}, sub {
 	    my @res;
 
 	    while (defined(my $repo = $q->dequeue)) {
@@ -1162,7 +1160,7 @@ sub snapshot {
 
     my @changed = collect(sub {
 	my $r = $mdata->repositories($_[0]);
-	$r->find_changed($dirstate);
+	return $r->find_changed($dirstate);
 	    }, @repos);
 
     for my $file (@changed) {
