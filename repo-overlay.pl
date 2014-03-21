@@ -4,6 +4,9 @@ use warnings "threads";
 no warnings "experimental::lexical_subs";
 use feature 'lexical_subs';
 
+use forks;
+use forks::shared;
+
 use threads qw(stringify);
 use threads::shared;
 use Thread::Queue;
