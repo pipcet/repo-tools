@@ -464,7 +464,7 @@ sub gitrepository {
 
     return $r->{gitrepository} if exists($r->{gitrepository});
 
-    $r->{gitrepository} = share(Git::Raw::Repository->open($r->gitpath));
+    $r->{gitrepository} = Git::Raw::Repository->open($r->gitpath);
 
     return $r->{gitrepository};
 }
@@ -532,8 +532,6 @@ sub new {
     my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
     my $r = bless {}, $class;
 
-    $r = shared_clone($r);
-
     bless $r, $class;
 
     $r->{relpath} = $path;
@@ -557,8 +555,6 @@ use File::Copy::Recursive qw(fcopy);
 use threads qw(stringify);
 use threads::shared;
 
-use threads::shared;
-
 sub find_changed_start {
     my ($r, $dirstate) = @_;
     my $mdata = $dirstate->{mdata};
@@ -579,7 +575,7 @@ sub find_changed_start {
 	return;
     }
 
-    $r->{pipe} = shared_clone([$r->gitz_start(diff => "$head", "--name-status")->()]);
+    $r->{pipe} = [$r->gitz_start(diff => "$head", "--name-status")->()];
 }
 
 sub find_changed {
@@ -805,7 +801,7 @@ sub find_changed_start {
 	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
     }
 
-    $r->{pipe} = shared_clone([$r->gitz_start(status =>)->()]);
+    $r->{pipe} = [$r->gitz_start(status =>)->()];
 }
 
 sub find_changed {
@@ -1334,8 +1330,6 @@ use parent -norequire, "ManifestData";
 use threads qw(stringify);
 use threads::shared;
 
-use threads::shared;
-
 sub repository_class {
     return "Repository::Git::Head";
 }
@@ -1398,7 +1392,7 @@ sub new {
 			       $date, $mdata->read_version($repopath));
     }
 
-    $mdata->{repos}{"/"} = shared_clone(new Repository::WD($pwd));
+    $mdata->{repos}{"/"} = new Repository::WD($pwd);
 
     return $mdata;
 }
@@ -1429,7 +1423,7 @@ sub new {
 
     $mdata->{repos_by_name_dir} = $repos_by_name_dir;
     $mdata->{date} = $date;
-    $mdata->{repos} = shared_clone({});
+    $mdata->{repos} = {};
 
     if (!defined($version)) {
 	if (defined($date)) {
@@ -1481,7 +1475,7 @@ sub new {
 			       $date, $mdata->read_version($repopath));
     }
 
-    $mdata->{repos}{"/"} = shared_clone(new Repository::WD($pwd));
+    $mdata->{repos}{"/"} = new Repository::WD($pwd);
 
     return $mdata;
 }
