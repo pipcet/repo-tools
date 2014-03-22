@@ -1341,8 +1341,6 @@ use parent -norequire, "ManifestData";
 use threads qw(stringify);
 use threads::shared;
 
-use threads::shared;
-
 sub repository_class {
     return "Repository::Git::Head";
 }
@@ -1733,8 +1731,8 @@ sub main {
     }
 
     unless ($dirstate_head) {
-	$mdata_head = new ManifestData::Head::New($apply_last_manifest, $date);
-	$dirstate_head = new DirState($mdata_head);
+	$mdata_head = shared_clone(new ManifestData::Head::New($apply_last_manifest, $date));
+	$dirstate_head = shared_clone(new DirState($mdata_head));
     }
 
     #my $mdata_head_old = new ManifestData::Head($apply_last_manifest, $date);
@@ -1828,6 +1826,8 @@ sub main {
 	check_apply($mdata_head, $apply, $apply_repo);
     }
 
+    my @threads;
+
     if (defined($apply) and defined($apply_repo) and
 	!$do_new_symlinks and !$do_new_versions) {
 
@@ -1838,7 +1838,8 @@ sub main {
 
 	$dirstate_head->snapshot("$outdir/head", $apply_repo);
     } else {
-	$dirstate_head->snapshot("$outdir/head");
+	push @threads, async
+	{ $dirstate_head->snapshot("$outdir/head"); };
     }
 
     #$dirstate_head_old->snapshot("$outdir/head-old") if $do_head_old;
@@ -1848,9 +1849,16 @@ sub main {
 		 !$do_new_symlinks and !$do_new_versions);
 
     if ($do_wd) {
-	my $mdata_wd = new ManifestData::WD();
-	my $dirstate_wd = new DirState($mdata_wd);
-	$dirstate_wd->snapshot("$outdir/wd");
+	push @threads, async
+	{
+	    my $mdata_wd = new ManifestData::WD();
+	    my $dirstate_wd = shared_clone(new DirState($mdata_wd));
+	    $dirstate_wd->snapshot("$outdir/wd");
+	}
+    }
+
+    for my $thread (@threads) {
+	$thread->join;
     }
 
     nsystem("rm $outdir/repo-overlay 2>/dev/null"); #XXX lock
