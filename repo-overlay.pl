@@ -571,7 +571,6 @@ sub find_changed_start {
 	return;
     }
 
-    $r->{pipe} = shared_clone([$r->gitz_start(diff => "$head", "--name-status")->()]);
 }
 
 sub find_changed {
@@ -594,7 +593,7 @@ sub find_changed {
 	return @res;
     }
 
-    my %diffstat = reverse @{$r->{pipe}};
+    my %diffstat = reverse $r->gitz(diff => "$head", "--name-status");
 
     for my $path (keys %diffstat) {
 	push @res, $repo.$path;
