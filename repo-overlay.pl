@@ -323,7 +323,6 @@ use parent -norequire, "Repository";
 
 use threads::shared;
 use threads qw(stringify);
-use threads::shared;
 
 sub gitpath {
     my ($r) = @_;
@@ -523,8 +522,6 @@ sub git_ancestor {
     return $r->gitp("merge-base", "--is-ancestor", $a, $b);
 }
 
-use Devel::Peek;
-
 sub new {
     my ($class, $path, $name, $url, $gitpath, $date, $version) = @_;
     my $r = bless {}, $class;
@@ -552,8 +549,6 @@ use Getopt::Long qw(:config auto_version auto_help);
 use File::PathConvert qw(abs2rel);
 use File::Copy::Recursive qw(fcopy);
 use threads qw(stringify);
-use threads::shared;
-
 use threads::shared;
 
 sub find_changed_start {
