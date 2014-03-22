@@ -1044,6 +1044,8 @@ sub mdata {
 sub items {
     my ($dirstate) = @_;
 
+    lock($dirstate);
+
     return map { $dirstate->{items}{$_}} sort keys %{$dirstate->{items}};
 }
 
@@ -1110,7 +1112,15 @@ sub store_item {
 
     $item->{repopath} = $repopath;
 
-    my $olditem = ($dirstate->{items}{$repopath} //= bless {}, "Item");
+    my $olditem;
+    lock($dirstate);
+    if (exists($dirstate->{items}{$repopath})) {
+	$olditem = $dirstate->{items}{$repopath};
+    } else {
+	$olditem = bless({}, "Item");
+	share($olditem);
+	$dirstate->{items}{$repopath} = $olditem;
+    }
 
     for my $key (keys %$item) {
 	$olditem->{$key} = $item->{$key};
