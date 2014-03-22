@@ -1133,9 +1133,11 @@ sub store_item {
 sub create_directory {
     my ($dirstate, $outdir) = @_;
 
-    for my $item ($dirstate->items) {
-	$item->create($dirstate, $outdir);
-    }
+    collect(
+	sub {
+	    $_[0]->create($dirstate, $outdir);
+	}, $dirstate->items
+	);
 }
 
 sub collect {
@@ -1195,19 +1197,21 @@ sub snapshot {
 	return $r->find_changed($dirstate);
 	    }, @repos);
 
-    for my $file (@changed) {
-	$dirstate->store_item($file, {changed=>1});
-    }
+    collect(sub {
+	$dirstate->store_item($_[0], {changed=>1});
+	    }, @changed);
 
     my @types = collect(sub {
 	my $r = $mdata->repositories($_[0]);
 	return $r->find_siblings_and_types($dirstate);
 	    }, @repos);
 
-    for my $typeentry (@types) {
-	my ($file, $type) = @$typeentry;
-	$dirstate->store_item($file, {type => $type});
-    }
+    collect(
+	sub {
+	    my ($file, $type) = @{$_[0]};
+	    $dirstate->store_item($file, {type => $type});
+	}, @types
+	);
 
     $dirstate->create_directory($outdir);
 }
