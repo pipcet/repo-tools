@@ -551,28 +551,6 @@ use File::Copy::Recursive qw(fcopy);
 use threads qw(stringify);
 use threads::shared;
 
-sub find_changed_start {
-    my ($r, $dirstate) = @_;
-    my $mdata = $dirstate->{mdata};
-    my $repo = $r->relpath;
-    my $head = $r->head;
-    my $oldhead = $r->{oldhead};
-    my $newhead = $r->{newhead};
-
-    $dirstate->store_item($repo, { type=>"dir" });
-    if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(xdirname($repo), {type=>"dir"});
-    } else {
-	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
-    }
-
-    if (!defined($head)) {
-	$dirstate->store_item($repo, {changed=>1});
-	return;
-    }
-
-}
-
 sub find_changed {
     my ($r, $dirstate) = @_;
     my $mdata = $dirstate->{mdata};
@@ -582,6 +560,13 @@ sub find_changed {
     my $newhead = $r->{newhead};
 
     my @res;
+
+    $dirstate->store_item($repo, { type=>"dir" });
+    if (begins_with($r->master, "$pwd/")) {
+	$dirstate->store_item(xdirname($repo), {type=>"dir"});
+    } else {
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+    }
 
     if (begins_with($r->master, "$pwd/")) {
     } else {
@@ -784,21 +769,6 @@ sub find_siblings_and_types {
     return @res;
 }
 
-sub find_changed_start {
-    my ($r, $dirstate) = @_;
-    my $mdata = $dirstate->{mdata};
-    my $repo = $r->relpath;
-
-    $dirstate->store_item($repo, { type=>"dir" });
-    if (begins_with($r->master, "$pwd/")) {
-	$dirstate->store_item(xdirname($repo), {type=>"dir"});
-    } else {
-	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
-    }
-
-    $r->{pipe} = shared_clone([$r->gitz_start(status =>)->()]);
-}
-
 sub find_changed {
     my ($r, $dirstate) = @_;
     my $mdata = $dirstate->{mdata};
@@ -807,6 +777,12 @@ sub find_changed {
     my $oldhead = $r->{oldhead};
     my $newhead = $r->{newhead};
 
+    $dirstate->store_item($repo, { type=>"dir" });
+    if (begins_with($r->master, "$pwd/")) {
+	$dirstate->store_item(xdirname($repo), {type=>"dir"});
+    } else {
+	$dirstate->store_item(xdirname($repo), {type=>"dir", changed=>1});
+    }
     my @res;
 
     if (begins_with($r->master, "$pwd/")) {
@@ -814,7 +790,7 @@ sub find_changed {
 	push @res, xdirname($repo);
     }
 
-    my @stat = @{$r->{pipe}};
+    my @stat = $r->gitz_start(status =>)->();
 
     for my $line (@stat) {
 	my ($stat, $path) = ($line =~ /^(..) (.*)$/msg);
@@ -886,8 +862,6 @@ sub create_link {
 
     copy_or_hardlink("$pwd/$repo$file", $dst) or die;
 }
-
-sub find_changed_start {}
 
 sub find_changed {
     my ($r, $dirstate, $path) = @_;
@@ -1185,11 +1159,6 @@ sub snapshot {
 	my $r = $mdata->repositories($_[0]);
 	$r->head if $r->can("head");
 	    }, @repos);
-
-    for my $repo (@repos) {
-	my $r = $mdata->repositories($repo);
-	$r->find_changed_start($dirstate);
-    }
 
     my @changed = collect(sub {
 	my $r = $mdata->repositories($_[0]);
