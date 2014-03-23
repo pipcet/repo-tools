@@ -1155,31 +1155,21 @@ sub snapshot {
 
     @repos = $dirstate->repos unless (@repos);
 
-    collect(sub {
-	my $r = $mdata->repositories($_[0]);
-	$r->head if $r->can("head");
-	    }, @repos);
-
-    my @changed = collect(sub {
-	my $r = $mdata->repositories($_[0]);
-	return $r->find_changed($dirstate);
-	    }, @repos);
-
-    collect(sub {
-	$dirstate->store_item($_[0], {changed=>1});
-	    }, @changed);
-
-    my @types = collect(sub {
-	my $r = $mdata->repositories($_[0]);
-	return $r->find_siblings_and_types($dirstate);
-	    }, @repos);
-
     collect(
 	sub {
-	    my ($file, $type) = @{$_[0]};
-	    $dirstate->store_item($file, {type => $type});
-	}, @types
-	);
+	    my $r = $mdata->repositories($_[0]);
+	    for my $path ($r->find_changed($dirstate)) {
+		$dirstate->store_item($_[0], {changed=>1});
+	    }
+	}, @repos);
+    collect(
+	sub {
+	    my $r = $mdata->repositories($_[0]);
+	    for my $typeentry ($r->find_siblings_and_types($dirstate)) {
+		my ($file, $type) = @$typeentry;
+		$dirstate->store_item($file, {type => $type});
+	    }
+	}, @repos);
 
     $dirstate->create_directory($outdir);
 }
