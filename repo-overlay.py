@@ -216,6 +216,7 @@ class RoGitRepositoryHead(RoGitRepository):
         oid = tree[file].id
         blob = self.pygit2repository[oid]
 
+        os.system("rm " + dst)
         symlink_absolute(blob.data, os.path.dirname(dst), os.path.basename(dst))
 
 class RoGitRepositoryHeadNew(RoGitRepositoryHead):
