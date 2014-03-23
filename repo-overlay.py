@@ -26,7 +26,7 @@ xxxpwd = os.getcwd()
 
 def symlink_relative(target, directory, name):
     try:
-        os.makedirs(directory)
+        makepath(directory)
     except OSError:
         pass
     relpath = os.path.relpath(target, directory)
@@ -37,7 +37,7 @@ def symlink_relative(target, directory, name):
 
 def symlink_absolute(target, directory, name):
     try:
-        os.makedirs(directory)
+        makepath(directory)
     except OSError:
         pass
     try:
@@ -46,7 +46,17 @@ def symlink_absolute(target, directory, name):
         pass
 
 def copy_or_hardlink(target, directory, name):
+    try:
+        makepath(directory)
+    except OSError:
+        pass
     shutil.copy2(target, os.path.join(directory, name))
+
+def makepath(path):
+    try:
+        os.makedirs(path)
+    except:
+        pass
 
 class RoRepository:
     def master(self):
@@ -190,17 +200,18 @@ class RoGitRepositoryHead(RoGitRepository):
         return res
 
     def create_file(self, file, dst):
-        os.makedirs(os.path.dirname(file))
-
+        makepath(os.path.dirname(dst))
         tree = self.pygit2tree
-        oid = tree[file]
+        oid = tree[file].id
         blob = self.pygit2repository[oid]
 
-        f = open(dst, 'w')
+        os.system("rm " + dst)
+        f = open(dst, 'wb')
         f.write(blob.data)
-        pass
 
     def create_link(self, file, dst):
+        makepath(os.path.dirname(dst))
+
         tree = self.pygit2tree
         oid = tree[file].id
         blob = self.pygit2repository[oid]
@@ -411,7 +422,7 @@ class Item:
 
             if dirstate.changed(path):
                 try:
-                    os.makedirs(os.path.join(outdir, path))
+                    makepath(os.path.join(outdir, path))
                 except OSError:
                     pass
             else:
@@ -438,7 +449,7 @@ class DirState:
             os.system("echo rm -rf " + outdir + "/*")
             os.system("echo rm -rf " + outdir + "/.repo")
             try:
-                os.makedirs(outdir)
+                makepath(outdir)
             except OSError:
                 pass
 
