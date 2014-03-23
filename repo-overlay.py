@@ -158,18 +158,19 @@ class RoGitRepositoryHead(RoGitRepository):
         if not self.master().startswith(xxxpwd + "/"):
             res.append(os.dirname(self.relpath))
 
+        print self.relpath
         l = deque(self.gitz("diff", self.head(), "--name-status"))
-        while(len(l) > 0):
+        while len(l) > 0:
             stat = l.popleft()
             path = l.popleft()
 
-            res.append(self.relpath + "/" + path)
+            res.append(os.path.join(self.relpath, path))
 
         if self.oldhead == self.newhead:
             return res
 
         l = deque(self.gitz("diff", self.oldhead + ".." + self.newhead, "--name-status"))
-        while(len(l) > 0):
+        while len(l) > 0:
             stat = l.popleft()
             path = l.popleft()
 
