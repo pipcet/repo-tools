@@ -64,7 +64,7 @@ class RoGitRepository(RoRepository):
         return out.rstrip()
 
     def gitz(self, *args):
-        proc = subprocess.Popen(["git", "-z"] + [arg for arg in args],
+        proc = subprocess.Popen(["git"] + [arg for arg in args] + ["-z"],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 cwd=self.gitpath)
         (out, err) = proc.communicate()
