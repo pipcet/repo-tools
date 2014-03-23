@@ -190,7 +190,8 @@ class RoGitRepositoryHead(RoGitRepository):
             itempath = os.path.join(path, entry.name)
             if filemode == "040":
                 res += [[itempath, "dir"]]
-                res += self.find_siblings_and_types(dirstate, itempath, self.pygit2repository[entry.id])
+                if dirstate.changed(os.path.join(self.relpath, itempath)):
+                    res += self.find_siblings_and_types(dirstate, itempath, self.pygit2repository[entry.id])
             elif filemode == "120":
                 res += [[itempath, "link"]]
             elif filemode == "100":
