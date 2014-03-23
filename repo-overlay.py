@@ -501,7 +501,7 @@ class DirState:
             return
 
         directory = os.path.dirname(path)
-        if directory in self.items or not item.changed or self.items[directory].changed:
+        if not directory in self.items:
             return
 
         diritem = Item(directory)
