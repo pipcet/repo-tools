@@ -569,6 +569,7 @@ setup_repo_links()
 
 if args.new_versions:
     os.system("echo rm -rf " + xxxoutdir + "/head/.pipcet-ro/versions/*")
+    os.system("rm -rf " + xxxoutdir + "/head-py")
 
 if args.new_versions:
     manifest_head = backtick(xxxpwd + "/.repo/manifests", "git", "log", "-1", "--first-parent", "--pretty=tformat:%H", "--until='$date")
