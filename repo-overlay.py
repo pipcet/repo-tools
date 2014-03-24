@@ -596,6 +596,43 @@ def setup_repo_links():
         symlink_absolute(os.path.join(xxxpwd, r.relpath),
                          linkdir, "repo")
 
+    other_repos = []
+    for path, dirs, files in os.walk(os.path.join(xxxoutdir, "other-repositories")):
+        if ".git" in dirs:
+            other_repos.append(path)
+
+    for repo in other_repos:
+        name=stripprefix(repo, os.path.join(xxxoutdir, "other-repositories")+"/")
+        linkdir=os.path.join(xxxoutdir, "repos-by-name", name)
+        print "repo", name, linkdir
+
+        makepath(linkdir)
+        symlink_absolute(os.path.join(xxxoutdir, "other-repositories", name),
+                         linkdir, "repo")
+
+def write_versions(mdata):
+    for repo in mdata.repos:
+        r = mdata.repos[repo]
+        if isinstance(r, RoEmptyRepository):
+            continue
+        head = ""
+        name = r.name
+        url = r.url
+        try:
+            head = r.head()
+        except:
+            pass
+        try:
+            comment = r.git("log", "-1", head)
+        except:
+            comment = ""
+        comment = "# "+"\n# ".join(comment.split("\n"))
+        makepath(os.path.join(xxxoutdir, "head-py", ".pipcet-ro", "versions", repo))
+
+        f = open(os.path.join(xxxoutdir, "head-py", ".pipcet-ro", "versions", repo, "version.txt"), 'wb')
+        f.write(repo + "/: " + head + " " + name + " " + url + "\n" + comment + "\n")
+        f.close()
+
 def backtick(cwd, *args):
     proc = subprocess.Popen([arg for arg in args],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
