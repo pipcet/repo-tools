@@ -421,12 +421,16 @@ class Item:
         path = self.repopath
         itemtype = self.itemtype
 
+        if path is None:
+            return
+
+        if not dirstate.changed(os.path.dirname(path)):
+            return
+
         if itemtype == "dir":
             if dirstate.changed(path):
                 makepath(os.path.join(outdir, path))
             else:
-                if not dirstate.changed(os.path.dirname(path)):
-                    return
                 makepath(os.path.join(outdir, os.path.dirname(path)))
                 if not os.path.lexists(os.path.join(outdir, path)):
                     symlink_relative(xxxpwd + "/" + path, os.path.dirname(os.path.join(outdir, path)),
