@@ -32,10 +32,7 @@ def delete_old_file(name):
         os.system("rm " + name)
 
 def symlink_relative(target, directory, name):
-    try:
-        makepath(directory)
-    except OSError:
-        pass
+    makepath(directory)
     relpath = os.path.relpath(target, directory)
     try:
         os.symlink(relpath, os.path.join(directory, name))
@@ -43,20 +40,15 @@ def symlink_relative(target, directory, name):
         pass
 
 def symlink_absolute(target, directory, name):
-    try:
-        makepath(directory)
-    except OSError:
-        pass
+    makepath(directory)
+
     try:
         os.symlink(target, os.path.join(directory, name))
     except OSError:
         pass
 
 def copy_or_hardlink(target, directory, name):
-    try:
-        makepath(directory)
-    except OSError:
-        pass
+    makepath(directory)
     shutil.copy2(target, os.path.join(directory, name))
 
 def makepath(path):
@@ -134,11 +126,11 @@ class RoGitRepository(RoRepository):
     def pygit2tree(self):
         if self._pygit2tree is None:
             r = self.pygit2repository
-            head = r.head.target
+            head = r[self.head()]
             while isinstance(head, pygit2.Reference):
                 head = head.target
 
-            self._pygit2tree = r.get(head).tree
+            self._pygit2tree = head.tree
         return self._pygit2tree
 
     @property
@@ -430,16 +422,15 @@ class Item:
         itemtype = self.itemtype
 
         if itemtype == "dir":
-            dirname = path
-            while not dirstate.changed(dirname):
-                (path, dirname) = (dirname, os.path.dirname(dirname))
-
             if dirstate.changed(path):
                 makepath(os.path.join(outdir, path))
             else:
-                makepath(os.path.join(outdir, dirname))
+                if not dirstate.changed(os.path.dirname(path)):
+                    return
+                makepath(os.path.join(outdir, os.path.dirname(path)))
                 if not os.path.lexists(os.path.join(outdir, path)):
-                    symlink_relative(xxxpwd + "/" + path, outdir, path)
+                    symlink_relative(xxxpwd + "/" + path, os.path.dirname(os.path.join(outdir, path)),
+                                     os.path.basename(path))
         elif itemtype == "file":
             if self.changed:
                 r.create_file(gitpath, outdir + "/" + repo + "/" + gitpath)
