@@ -24,6 +24,10 @@ args = parser.parse_args()
 args.new_versions = True
 xxxpwd = os.getcwd()
 
+def delete_old_file(name):
+    if os.path.isfile(name) or os.path.islink(name):
+        os.system("rm " + name)
+
 def symlink_relative(target, directory, name):
     try:
         makepath(directory)
@@ -158,7 +162,6 @@ class RoGitRepositoryHead(RoGitRepository):
         if not self.master().startswith(xxxpwd + "/"):
             res.append(os.dirname(self.relpath))
 
-        print self.relpath
         l = deque(self.gitz("diff", self.head(), "--name-status"))
         while len(l) > 0:
             stat = l.popleft()
@@ -210,7 +213,7 @@ class RoGitRepositoryHead(RoGitRepository):
         oid = tree[file].id
         blob = self.pygit2repository[oid]
 
-        os.system("rm " + dst)
+        delete_old_file(dst)
         f = open(dst, 'wb')
         f.write(blob.data)
 
@@ -221,7 +224,7 @@ class RoGitRepositoryHead(RoGitRepository):
         oid = tree[file].id
         blob = self.pygit2repository[oid]
 
-        os.system("rm " + dst)
+        delete_old_file(dst)
         symlink_absolute(blob.data, os.path.dirname(dst), os.path.basename(dst))
 
 class RoGitRepositoryHeadNew(RoGitRepositoryHead):
