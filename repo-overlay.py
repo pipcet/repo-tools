@@ -178,9 +178,12 @@ class RoGitRepositoryHead(RoGitRepository):
 
         return res
 
-    def find_siblings_and_types(self, dirstate, path="", tree=None):
+    def find_siblings_and_types(self, dirstate, path=None, tree=None):
         if tree is None:
             tree = self.pygit2tree
+
+        if path is None:
+            path = self.relpath
 
         res = []
 
@@ -190,7 +193,7 @@ class RoGitRepositoryHead(RoGitRepository):
             itempath = os.path.join(path, entry.name)
             if filemode == "040":
                 res += [[itempath, "dir"]]
-                if dirstate.changed(os.path.join(self.relpath, itempath)):
+                if dirstate.changed(itempath):
                     res += self.find_siblings_and_types(dirstate, itempath, self.pygit2repository[entry.id])
             elif filemode == "120":
                 res += [[itempath, "link"]]
@@ -264,6 +267,7 @@ class RoGitRepositoryWD(RoGitRepository):
     def find_siblings_and_types(self, dirstate, path=None):
         if path is None:
             path = self.relpath
+
         res = []
         for f in os.listdir(os.path.join(xxxpwd, path)):
             fullpath = os.path.join(xxxpwd, path, f)
@@ -271,7 +275,8 @@ class RoGitRepositoryWD(RoGitRepository):
                 continue
             if f == ".git":
                 continue
-            if fullpath.startswith(os.path.join(xxxpwd, "out")):
+            if (fullpath.startswith(os.path.join(xxxpwd, "out") + "/") or
+                fullpath == os.path.join(xxxpwd, "out")):
                 continue
             if os.path.islink(fullpath):
                 res.append([os.path.join(path, f), "link"])
@@ -424,11 +429,9 @@ class Item:
                 (path, dirname) = (dirname, os.path.dirname(dirname))
 
             if dirstate.changed(path):
-                try:
-                    makepath(os.path.join(outdir, path))
-                except OSError:
-                    pass
+                makepath(os.path.join(outdir, path))
             else:
+                makepath(os.path.join(outdir, dirname))
                 if not os.path.lexists(os.path.join(outdir, path)):
                     symlink_relative(xxxpwd + "/" + path, outdir, path)
         elif itemtype == "file":
@@ -451,10 +454,7 @@ class DirState:
 
             os.system("echo rm -rf " + outdir + "/*")
             os.system("echo rm -rf " + outdir + "/.repo")
-            try:
-                makepath(outdir)
-            except OSError:
-                pass
+            makepath(outdir)
 
         changed = []
         for repo in self.mdata.repos:
@@ -512,7 +512,6 @@ class DirState:
         diritem.itemtype = "dir"
         if item.changed:
             diritem.changed = True
-
 
         self.store_item(directory, diritem)
 
