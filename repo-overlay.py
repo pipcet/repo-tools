@@ -657,3 +657,5 @@ mdata_head = ManifestData(version=manifest_head, date="March.1")
 dirstate_head = DirState(mdata_head)
 
 dirstate_head.snapshot("/home/pip/tmp-repo-overlay/head-py")
+
+write_versions(mdata_head)
