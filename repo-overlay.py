@@ -642,6 +642,8 @@ def backtick(cwd, *args):
 
 xxxoutdir = "/home/pip/tmp-repo-overlay"
 
+date = "Mach.1"
+
 setup_repo_links()
 
 if args.new_versions:
@@ -649,11 +651,12 @@ if args.new_versions:
     os.system("rm -rf " + xxxoutdir + "/head-py")
 
 if args.new_versions:
-    manifest_head = backtick(xxxpwd + "/.repo/manifests", "git", "log", "-1", "--first-parent", "--pretty=tformat:%H", "--until='$date")
+    manifest_head = backtick(xxxpwd + "/.repo/manifests", "git", "log", "-1", "--first-parent", "--pretty=tformat:%H", "--until='" + date + "'")
+    print "manifest_head", manifest_head
 else:
     manifest_head = ManifestData().read_version(".repo/manifests")
 
-mdata_head = ManifestData(version=manifest_head, date="March.1")
+mdata_head = ManifestData(version=manifest_head, date=date)
 dirstate_head = DirState(mdata_head)
 
 dirstate_head.snapshot("/home/pip/tmp-repo-overlay/head-py")
