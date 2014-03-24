@@ -3,6 +3,9 @@ import pygit2
 import argparse
 import os
 import shutil
+import threading
+import Queue
+import signal
 
 from string import hexdigits
 from collections import deque
@@ -459,15 +462,53 @@ class DirState:
             os.system("echo rm -rf " + outdir + "/.repo")
             makepath(outdir)
 
+        lock = threading.Lock()
+        q1 = Queue.Queue()
+        q2 = Queue.Queue()
+
+        def thr_changed(changed):
+            while True:
+                repo = q1.get()
+                lchanged = self.mdata.repos[repo].find_changed(self)
+                with lock:
+                    changed += lchanged
+                q1.task_done()
+
+        def thr_siblings_and_types(types):
+            while True:
+                repo = q2.get()
+                ltypes = self.mdata.repos[repo].find_siblings_and_types(self, repo)
+                with lock:
+                    types += ltypes
+                q2.task_done()
+
+        threads = []
         changed = []
+        for count in range(128):
+            threads.append(threading.Thread(target=thr_changed, args=[changed]))
+        for t in threads:
+            t.daemon = True
+            t.start()
         for repo in self.mdata.repos:
-            changed += self.mdata.repos[repo].find_changed(self)
+            q1.put(repo)
+
+        q1.join()
+
         for path in changed:
             self.store_item(path, Item(path, changed=1))
 
+        threads = []
         types = []
+        for count in range(128):
+            threads.append(threading.Thread(target=thr_siblings_and_types, args=[types]))
+        for t in threads:
+            t.daemon = True
+            t.start()
         for repo in self.mdata.repos:
-            types += self.mdata.repos[repo].find_siblings_and_types(self, repo)
+            q2.put(repo)
+
+        q2.join()
+
         for path, itemtype in types:
             self.store_item(path, Item(path, itemtype=itemtype))
 
