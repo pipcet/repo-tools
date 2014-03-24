@@ -1159,7 +1159,7 @@ sub snapshot {
 	sub {
 	    my $r = $mdata->repositories($_[0]);
 	    for my $path ($r->find_changed($dirstate)) {
-		$dirstate->store_item($_[0], {changed=>1});
+		$dirstate->store_item($path, {changed=>1});
 	    }
 	}, @repos);
     collect(
