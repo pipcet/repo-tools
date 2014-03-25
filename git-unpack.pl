@@ -72,6 +72,19 @@ sub unpack_signature {
     return $outdir;
 }
 
+sub unpack_signature {
+    my ($o, $outdir) = @_;
+
+    make_path($outdir);
+
+    write_file("$outdir/name", $o->name);
+    write_file("$outdir/email", $o->email);
+    write_file("$outdir/time", $o->time);
+    write_file("$outdir/offset", $o->offset);
+
+    return $outdir;
+}
+
 sub unpack_commit {
     my ($o, $outdir) = @_;
     my $id = $o->id;
@@ -81,6 +94,10 @@ sub unpack_commit {
     write_file("$outdir/type", "commit");
     write_file("$outdir/message", $o->message);
     write_file("$outdir/raw_header", $o->raw_header);
+
+    unpack_signature($o->author, "$outdir/author");
+    unpack_signature($o->committer, "$outdir/committer");
+
     make_path($outdir."/parents");
     my @parents = @{$o->parents};
     my $i = 1;
@@ -93,6 +110,7 @@ sub unpack_commit {
     my $id = $o->tree->id;
     $knownids{$id}++;
     symlink("../../tree-full/$id", "$outdir/tree-full");
+    symlink("../../tree-minimal/$id", "$outdir/tree-minimal");
 
     return $outdir;
 }
@@ -106,7 +124,7 @@ sub unpack_entry_minimal {
     write_file("$outdir/filemode", $filemode);
 
     my $id = $o->id;
-    symlink_relative("../../../../object/$id", "$outdir/object");
+    symlink_relative("../../../../../object/$id", "$outdir/object");
 
     return $outdir;
 }
@@ -206,3 +224,11 @@ do {
 	$didsomething += unpack_maybe($repository, $id, "metagit")
     }
 } while($didsomething);
+
+for my $id (sort keys %knownids) {
+    if (-d "metagit/commit/$id") {
+	for (my $pid = 1; -e "metagit/commit/$id/parents/$pid"; $pid++) {
+	    system("cd metagit/commit/$id; mkdir diff; diff -urN parents/$pid/tree-full tree-full > diff/$pid");
+	}
+    }
+}
