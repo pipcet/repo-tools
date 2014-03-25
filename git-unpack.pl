@@ -519,7 +519,7 @@ while(my $arg = shift(@ARGV)) {
 	exit(0);
     }
     if ($arg eq "meta-pack") {
-	system("mkdir metadotgit; cp -a .git metadotgit");
+	system("mkdir metadotgit; git clone . metadotgit");
 	my $repo = Git::Raw::Repository->open("metadotgit");
 
 	my $packer = Packer->new($repo);
