@@ -92,35 +92,65 @@ sub unpack_commit {
     }
     my $id = $o->tree->id;
     $knownids{$id}++;
-    symlink("../../tree/$id", "$outdir/tree");
+    symlink("../../tree-full/$id", "$outdir/tree-full");
 
     return $outdir;
 }
 
-sub unpack_entry {
+sub unpack_entry_minimal {
     my ($o, $outdir) = @_;
 
-    make_path($outdir);
+    make_path(xdirname($outdir));
 
-    write_file("$outdir/type", "tree entry");
+    my $filemode = $o->filemode;
+    write_file("$outdir/filemode", $filemode);
+
     my $id = $o->id;
-    $knownids{$id}++;
-    write_file("$outdir/filemode", $o->filemode);
-    symlink("../../../../object/$id", "$outdir/object");
+    symlink_relative("../../../../object/$id", "$outdir/object");
 
     return $outdir;
 }
 
-sub unpack_tree {
+sub unpack_tree_minimal {
     my ($o, $outdir) = @_;
     my $id = $o->id;
 
     make_path($outdir);
-
-    write_file("$outdir/type", "tree");
-    make_path("$outdir/entries");
     for my $entry (@{$o->entries}) {
-	unpack_entry($entry, "$outdir/entries/" . $entry->name)
+	unpack_entry_minimal($entry, "$outdir/entries/" . $entry->name)
+    }
+
+    return $outdir;
+}
+
+sub unpack_entry_full {
+    my ($o, $outdir) = @_;
+
+    make_path(xdirname($outdir));
+
+    my $filemode = $o->filemode;
+
+    if ($filemode eq "100644") {
+	write_file($outdir, $o->object->content);
+    } elsif ($filemode eq "100755") {
+	write_file($outdir, $o->object->content);
+	chmod(0755, $outdir);
+    } elsif ($filemode eq "040000") {
+	unpack_tree_full($o->object, $outdir);
+    } else {
+	die "filemode $filemode";
+    }
+
+    return $outdir;
+}
+
+sub unpack_tree_full {
+    my ($o, $outdir) = @_;
+    my $id = $o->id;
+
+    make_path($outdir);
+    for my $entry (@{$o->entries}) {
+	unpack_entry_full($entry, "$outdir/" . $entry->name)
     }
 
     return $outdir;
@@ -143,7 +173,8 @@ sub unpack_object {
     if ($o->isa("Git::Raw::Commit")) {
 	$path = unpack_commit($o, "$outdir/commit/$id");
     } elsif ($o->isa("Git::Raw::Tree")) {
-	$path = unpack_tree($o, "$outdir/tree/$id");
+	$path = unpack_tree_full($o, "$outdir/tree-full/$id");
+	$path = unpack_tree_minimal($o, "$outdir/tree-minimal/$id");
     } elsif ($o->isa("Git::Raw::Blob")) {
 	$path = unpack_blob($o, "$outdir/blob/$id");
     } else {
