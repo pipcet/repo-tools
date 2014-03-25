@@ -5,6 +5,7 @@ use File::Path qw(make_path);
 use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
+use File::Slurp qw(slurp);
 
 use Git::Raw;
 use Carp::Always;
@@ -54,6 +55,7 @@ sub symlink_relative {
     symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
 }
 
+
 sub write_file {
     my ($name, $value) = @_;
     my $fh;
@@ -63,6 +65,21 @@ sub write_file {
     open($fh, ">$name") or die;
     print $fh $value;
     close($fh);
+}
+
+sub read_file {
+    my ($name) = @_;
+
+    return slurp($name);
+}
+
+sub pack_signature {
+    my ($outdir) = @_;
+
+    return Git::Raw::Signature->new(read_file("$outdir/name"),
+				    read_file("$outdir/email"),
+				    read_file("$outdir/time"),
+				    read_file("$outdir/offset"));
 }
 
 sub unpack_signature {
@@ -76,6 +93,25 @@ sub unpack_signature {
     write_file("$outdir/offset", $o->offset);
 
     return $outdir;
+}
+
+sub pack_commit {
+    my ($packer, $outdir) = @_;
+    my $repo = $packer->{repo};
+    my $id = basename($outdir);
+
+    my $author = pack_signature("$outdir/author");
+    my $committer = pack_signature("$outdir/committer");
+    my $message = read_file("$outdir/message");
+    my $tree = pack_tree_full("$outdir/tree-full");
+    my @parents;
+
+    for (my $i = 1; -l "$outdir/parents/$i"; $i++) {
+	push @parents, pack_commit("$outdir/parents/$i", $repo);
+    }
+
+    return Git::Raw::Commit->create($repo, $message, $author, $committer,
+				    \@parents, $tree);
 }
 
 sub unpack_commit {
@@ -153,6 +189,16 @@ sub unpack_entry_full {
     }
 
     return $outdir;
+}
+
+sub pack_tree_full {
+    my ($outdir, $repo) = @_;
+
+    # XXX. Need to understand the treebuilder object
+
+    my $realpath = readlink($outdir);
+
+    return $repo->lookup(basename($realpath));
 }
 
 sub unpack_tree_full {
