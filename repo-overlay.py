@@ -157,8 +157,11 @@ class RoGitRepository(RoRepository):
 class RoGitRepositoryHead(RoGitRepository):
     def find_changed(self, dirstate):
         res = []
+        if self.master() == "":
+            return res
+
         if not self.master().startswith(xxxpwd + "/"):
-            res.append(os.dirname(self.relpath))
+            res.append(os.path.dirname(self.relpath))
 
         l = deque(self.gitz("diff", self.head(), "--name-status"))
         while len(l) > 0:
@@ -180,6 +183,9 @@ class RoGitRepositoryHead(RoGitRepository):
         return res
 
     def find_siblings_and_types(self, dirstate, path=None, tree=None):
+        if self.master() == "":
+            return []
+
         if tree is None:
             tree = self.pygit2tree
 
@@ -243,7 +249,7 @@ class RoGitRepositoryWD(RoGitRepository):
     def find_changed(self, dirstate):
         res = []
         if not self.master().startswith(xxxpwd + "/"):
-            res.append(os.dirname(self.relpath))
+            res.append(os.path.dirname(self.relpath))
 
         l = deque(self.gitz("status"))
         while len(l) > 0:
@@ -441,7 +447,11 @@ class Item:
             else:
                 makepath(os.path.join(outdir, os.path.dirname(path)))
                 if not os.path.lexists(os.path.join(outdir, path)):
-                    symlink_relative(xxxpwd + "/" + path, os.path.dirname(os.path.join(outdir, path)),
+                    if r is not None:
+                        target = os.path.join(r.master(), gitpath)
+                    else:
+                        target = os.path.join(xxxpwd, path)
+                    symlink_relative(target, os.path.dirname(os.path.join(outdir, path)),
                                      os.path.basename(path))
         elif itemtype == "file":
             if self.changed:
