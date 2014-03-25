@@ -57,17 +57,6 @@ sub symlink_relative {
 }
 
 
-sub write_file {
-    my ($name, $value) = @_;
-    my $fh;
-
-    mkdirp(xdirname($name));
-
-    open($fh, ">$name") or die;
-    print $fh $value;
-    close($fh);
-}
-
 package Packer;
 
 use File::Basename qw(dirname basename);
@@ -162,10 +151,66 @@ sub new {
     return $p;
 }
 
-package main;
+package Unpacker;
+
+use File::Basename qw(dirname basename);
+use File::Path qw(make_path);
+use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
+use File::PathConvert qw(abs2rel rel2abs);
+use File::Copy::Recursive qw(fcopy);
+
+sub xdirname {
+    return dirname(@_) =~ s/^\.$//r;
+}
+
+# all ancestor directories of a path
+sub prefixes {
+    my ($path) = @_;
+    my @res;
+
+    while ($path ne "" and $path ne "/") {
+	push @res, $path;
+	$path = xdirname($path);
+    }
+
+    shift @res;
+    return @res;
+}
+
+sub mkdirp {
+    my ($dir) = @_;
+
+    for my $pref (prefixes($dir)) {
+	die $pref if -l $pref;
+    }
+
+    make_path($dir);
+
+    return 1;
+}
+
+sub symlink_relative {
+    my ($src, $dst) = @_;
+    my $relsrc = abs2rel($src, xdirname($dst));
+
+    mkdirp(xdirname($dst)) or die "cannot make symlink $dst -> $relsrc";
+
+    symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
+}
+
+sub write_file {
+    my ($name, $value) = @_;
+    my $fh;
+
+    mkdirp(xdirname($name));
+
+    open($fh, ">$name") or die;
+    print $fh $value;
+    close($fh);
+}
 
 sub unpack_signature {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
 
     make_path($outdir);
 
@@ -178,7 +223,7 @@ sub unpack_signature {
 }
 
 sub unpack_commit {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
     my $id = $o->id;
 
     make_path($outdir);
@@ -187,8 +232,8 @@ sub unpack_commit {
     write_file("$outdir/message", $o->message);
     write_file("$outdir/raw_header", $o->raw_header);
 
-    unpack_signature($o->author, "$outdir/author");
-    unpack_signature($o->committer, "$outdir/committer");
+    $unp->unpack_signature($o->author, "$outdir/author");
+    $unp->unpack_signature($o->committer, "$outdir/committer");
 
     make_path($outdir."/parents");
     my @parents = @{$o->parents};
@@ -208,7 +253,7 @@ sub unpack_commit {
 }
 
 sub unpack_tree_entry_minimal {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
 
     make_path(xdirname($outdir));
 
@@ -222,19 +267,19 @@ sub unpack_tree_entry_minimal {
 }
 
 sub unpack_tree_minimal {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
     my $id = $o->id;
 
     make_path($outdir);
     for my $entry (@{$o->entries}) {
-	unpack_tree_entry_minimal($entry, "$outdir/entries/" . $entry->name)
+	$unp->unpack_tree_entry_minimal($entry, "$outdir/entries/" . $entry->name)
     }
 
     return $outdir;
 }
 
 sub unpack_tree_entry_full {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
 
     make_path(xdirname($outdir));
 
@@ -246,7 +291,7 @@ sub unpack_tree_entry_full {
 	write_file($outdir, $o->object->content);
 	chmod(0755, $outdir);
     } elsif ($filemode eq "040000") {
-	unpack_tree_full($o->object, $outdir);
+	$unp->unpack_tree_full($o->object, $outdir);
     } else {
 	die "filemode $filemode";
     }
@@ -255,19 +300,19 @@ sub unpack_tree_entry_full {
 }
 
 sub unpack_tree_full {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
     my $id = $o->id;
 
     make_path($outdir);
     for my $entry (@{$o->entries}) {
-	unpack_tree_entry_full($entry, "$outdir/" . $entry->name)
+	$unp->unpack_tree_entry_full($entry, "$outdir/" . $entry->name)
     }
 
     return $outdir;
 }
 
 sub unpack_blob {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
     my $id = $o->id;
 
     write_file($outdir, $o->content);
@@ -276,17 +321,17 @@ sub unpack_blob {
 }
 
 sub unpack_object {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
     my $id = $o->id;
     my $path;
 
     if ($o->isa("Git::Raw::Commit")) {
-	$path = unpack_commit($o, "$outdir/commit/$id");
+	$path = $unp->unpack_commit($o, "$outdir/commit/$id");
     } elsif ($o->isa("Git::Raw::Tree")) {
-	$path = unpack_tree_full($o, "$outdir/tree-full/$id");
-	$path = unpack_tree_minimal($o, "$outdir/tree-minimal/$id");
+	$path = $unp->unpack_tree_full($o, "$outdir/tree-full/$id");
+	$path = $unp->unpack_tree_minimal($o, "$outdir/tree-minimal/$id");
     } elsif ($o->isa("Git::Raw::Blob")) {
-	$path = unpack_blob($o, "$outdir/blob/$id");
+	$path = $unp->unpack_blob($o, "$outdir/blob/$id");
     } else {
 	die;
     }
@@ -297,10 +342,11 @@ sub unpack_object {
 }
 
 sub unpack_reflog_entry {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
 
     make_path($outdir);
-    unpack_signature($o->{committer}, "$outdir/committer");
+    # xxx corruption here
+    $unp->unpack_signature($o->{committer}, "$outdir/committer");
     write_file("$outdir/message", $o->{message});
     symlink("../../../../object/" . $o->{new_id}, "$outdir/new");
     symlink("../../../../object/" . $o->{old_id}, "$outdir/old");
@@ -309,16 +355,16 @@ sub unpack_reflog_entry {
 }
 
 sub unpack_reflog {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
 
     make_path($outdir);
     for my $entry ($o->entries) {
-	unpack_reflog_entry($entry, "$outdir/" . $entry->{new_id});
+	$unp->unpack_reflog_entry($entry, "$outdir/" . $entry->{new_id});
     }
 }
 
 sub unpack_reference {
-    my ($o, $outdir) = @_;
+    my ($unp, $o, $outdir) = @_;
 
     make_path($outdir);
     write_file("$outdir/name", $o->name);
@@ -328,19 +374,30 @@ sub unpack_reference {
     } else {
 	symlink("../../object/" . $o->target->id, "$outdir/target");
     }
-    unpack_reflog($o->reflog, "$outdir/reflog");
+    $unp->unpack_reflog($o->reflog, "$outdir/reflog");
 }
 
 sub unpack_maybe {
-    my ($repo, $id, $outdir) = @_;
+    my ($unp, $repo, $id, $outdir) = @_;
 
     if (!-l "$outdir/object/$id" and !-e "$outdir/object/$id") {
-	unpack_object($repo->lookup($id), $outdir);
+	$unp->unpack_object($repo->lookup($id), $outdir);
 	return 1;
     }
 
     return 0;
 }
+
+sub new {
+    my ($class, $repo, $dir) = @_;
+    my $unp = { repo => $repo, dir => $dir };
+
+    bless $unp, $class;
+
+    return $unp;
+}
+
+package main;
 
 while(my $arg = shift(@ARGV)) {
     if ($arg eq "--help") {
@@ -350,16 +407,18 @@ while(my $arg = shift(@ARGV)) {
 	die "no version";
     }
     if ($arg eq "meta-unpack") {
+	my $unp = new Unpacker($repository, "metagit");
+
 	my $didsomething;
 	do {
 	    $didsomething = 0;
 	    for my $id (sort keys %knownids) {
-		$didsomething += unpack_maybe($repository, $id, "metagit")
+		$didsomething += $unp->unpack_maybe($repository, $id, "metagit")
 	    }
 	} while($didsomething);
 
 	for my $ref ($repository->refs) {
-	    unpack_reference($ref, "metagit/" . "refs/" . ($ref->name =~ s/\//_/msgr));
+	    $unp->unpack_reference($ref, "metagit/" . "refs/" . ($ref->name =~ s/\//_/msgr));
 	}
 
 	for my $id (sort keys %knownids) {
