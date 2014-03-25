@@ -5,10 +5,10 @@ use File::Path qw(make_path);
 use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
-use File::Slurp qw(slurp);
+#use File::Slurp qw(slurp);
 
 use Git::Raw;
-use Carp::Always;
+#use Carp::Always;
 
 my $repository = Git::Raw::Repository->open(".");
 my $head = $repository->head;
@@ -67,6 +67,20 @@ sub write_file {
     close($fh);
 }
 
+package Packer;
+
+use File::Basename qw(dirname basename);
+use File::Path qw(make_path);
+use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
+use File::PathConvert qw(abs2rel rel2abs);
+use File::Copy::Recursive qw(fcopy);
+
+sub slurp {
+    my ($file) = @_;
+
+    return `cat $file`;
+}
+
 sub read_file {
     my ($name) = @_;
 
@@ -74,13 +88,77 @@ sub read_file {
 }
 
 sub pack_signature {
-    my ($outdir) = @_;
+    my ($packer, $outdir) = @_;
 
     return Git::Raw::Signature->new(read_file("$outdir/name"),
 				    read_file("$outdir/email"),
 				    read_file("$outdir/time"),
 				    read_file("$outdir/offset"));
 }
+
+sub pack_commit {
+    my ($packer, $outdir) = @_;
+    my $repo = $packer->{repo};
+    my $id = basename($outdir);
+
+    return $packer->{hash}{$id} if exists($packer->{hash}{$id});
+
+    my $author = $packer->pack_signature("$outdir/author");
+    my $committer = $packer->pack_signature("$outdir/committer");
+    my $message = read_file("$outdir/message");
+    my $tree = $packer->pack_tree_full("$outdir/tree-full");
+    my @parents;
+
+    for (my $i = 1; -l "$outdir/parents/$i"; $i++) {
+	my $realpath = rel2abs(readlink("$outdir/parents/$i"), "$outdir/parents");
+	push @parents, $packer->pack_commit($realpath, $repo);
+    }
+
+
+    warn($repo, $message, $author, $committer,
+	 \@parents, $tree);
+    $packer->{hash}{$id} =
+	Git::Raw::Commit->create($repo, $message, $author, $committer,
+				 \@parents, $tree);
+
+    warn "id $id";
+
+    return $packer->{hash}{$id};
+}
+
+sub pack_tree_full {
+    my ($packer, $outdir) = @_;
+    my $repo = $packer->{repo};
+    my $id = basename(readlink($outdir));
+
+    warn "id $id";
+
+    # XXX. Need to understand the treebuilder object
+
+    my $realpath = readlink($outdir);
+
+    my $tree = Git::Raw::Tree::Builder->new($repo, $repo->lookup($id))->write;
+
+    $id = $tree->id;
+    warn "tree $tree $repo $id";
+
+    $tree = $repo->lookup($id);
+    warn "tree $tree $repo $id";
+
+    return $tree;
+}
+
+sub new {
+    my ($class, $repo) = @_;
+
+    my $p = { repo => $repo, hash => {} };
+
+    bless $p, $class;
+
+    return $p;
+}
+
+package main;
 
 sub unpack_signature {
     my ($o, $outdir) = @_;
@@ -93,25 +171,6 @@ sub unpack_signature {
     write_file("$outdir/offset", $o->offset);
 
     return $outdir;
-}
-
-sub pack_commit {
-    my ($packer, $outdir) = @_;
-    my $repo = $packer->{repo};
-    my $id = basename($outdir);
-
-    my $author = pack_signature("$outdir/author");
-    my $committer = pack_signature("$outdir/committer");
-    my $message = read_file("$outdir/message");
-    my $tree = pack_tree_full("$outdir/tree-full");
-    my @parents;
-
-    for (my $i = 1; -l "$outdir/parents/$i"; $i++) {
-	push @parents, pack_commit("$outdir/parents/$i", $repo);
-    }
-
-    return Git::Raw::Commit->create($repo, $message, $author, $committer,
-				    \@parents, $tree);
 }
 
 sub unpack_commit {
@@ -191,16 +250,6 @@ sub unpack_entry_full {
     return $outdir;
 }
 
-sub pack_tree_full {
-    my ($outdir, $repo) = @_;
-
-    # XXX. Need to understand the treebuilder object
-
-    my $realpath = readlink($outdir);
-
-    return $repo->lookup(basename($realpath));
-}
-
 sub unpack_tree_full {
     my ($o, $outdir) = @_;
     my $id = $o->id;
@@ -266,8 +315,19 @@ do {
 
 for my $id (sort keys %knownids) {
     if (-d "metagit/commit/$id") {
-	for (my $pid = 1; -e "metagit/commit/$id/parents/$pid"; $pid++) {
-	    system("cd metagit/commit/$id; mkdir diff; diff -urN parents/$pid/tree-full tree-full > diff/$pid");
+	for (my $pid = 1; -l "metagit/commit/$id/parents/$pid"; $pid++) {
+	    system("cd metagit/commit/$id; mkdir -p diff; diff -urN parents/$pid/tree-full tree-full > diff/$pid");
 	}
+    }
+}
+
+system("mkdir metadotgit; cp -a .git metadotgit");
+my $repo = Git::Raw::Repository->open("metadotgit");
+
+my $packer = Packer->new($repo);
+
+for my $id (sort keys %knownids) {
+    if (-d "metagit/commit/$id") {
+	$packer->pack_commit("metagit/commit/$id");
     }
 }
