@@ -104,14 +104,9 @@ sub pack_commit {
 	push @parents, $packer->pack_commit($realpath, $repo);
     }
 
-
-    warn($repo, $message, $author, $committer,
-	 \@parents, $tree);
     $packer->{hash}{$id} =
 	Git::Raw::Commit->create($repo, $message, $author, $committer,
 				 \@parents, $tree);
-
-    warn "id $id";
 
     return $packer->{hash}{$id};
 }
@@ -121,8 +116,6 @@ sub pack_tree_full {
     my $repo = $packer->{repo};
     my $id = basename(readlink($outdir));
 
-    warn "id $id";
-
     # XXX. Need to understand the treebuilder object
 
     my $realpath = readlink($outdir);
@@ -130,10 +123,7 @@ sub pack_tree_full {
     my $tree = Git::Raw::Tree::Builder->new($repo, $repo->lookup($id))->write;
 
     $id = $tree->id;
-    warn "tree $tree $repo $id";
-
     $tree = $repo->lookup($id);
-    warn "tree $tree $repo $id";
 
     return $tree;
 }
