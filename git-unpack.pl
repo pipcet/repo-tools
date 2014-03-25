@@ -8,7 +8,7 @@ use File::Copy::Recursive qw(fcopy);
 use File::Slurp qw(slurp read_dir);
 use List::Util qw(min max);
 use Git::Raw;
-#use Carp::Always;
+use Carp::Always;
 
 my $repository = Git::Raw::Repository->open(".");
 my $head = $repository->head;
@@ -345,13 +345,13 @@ sub unpack_reflog_entry {
     my ($unp, $o, $outdir) = @_;
 
     make_path($outdir);
-    # xxx corruption here
     $unp->unpack_signature($o->{committer}, "$outdir/committer");
     write_file("$outdir/message", $o->{message});
-    symlink("../../../../object/" . $o->{new_id}, "$outdir/new");
-    symlink("../../../../object/" . $o->{old_id}, "$outdir/old");
+    symlink_relative($unp->{dir} . "/object/" . $o->{new_id}, "$outdir/new");
+    symlink_relative($unp->{dir} . "/object/" . $o->{old_id}, "$outdir/old");
 
-    #system("diff -urN old new > diff");
+    system("cd $outdir; diff -urN old/tree-full new/tree-full > diff.diff")
+	if -e "$outdir/old/tree-full" and -e "$outdir/new/tree-full";
 }
 
 sub unpack_reflog {
