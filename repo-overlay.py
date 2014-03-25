@@ -59,10 +59,13 @@ def makepath(path):
 
 class RoRepository:
     def master(self):
-        path = xxxoutdir + "/repos-by-name/" + self.name + "/repo"
-        master = os.readlink(path)
+        try:
+            path = xxxoutdir + "/repos-by-name/" + self.name + "/repo"
+            master = os.readlink(path)
 
-        return os.path.join(os.path.dirname(path), master)
+            return os.path.join(os.path.dirname(path), master)
+        except OSError:
+            return ""
 
 class RoGitRepository(RoRepository):
     def git(self, *args):
@@ -295,11 +298,18 @@ class RoGitRepositoryWD(RoGitRepository):
 
 
 class RoEmptyRepository(RoRepository):
+    def master(self):
+        return xxxpwd
+
     def find_changed(self, dirstate):
         return []
 
-    def find_siblings_and_types(self, dirstate, path=""):
-        return []
+    def find_siblings_and_types(self, dirstate, dummy):
+        res = []
+        for repo in dirstate.mdata.repos:
+            print repo
+            res.append([repo, "dir"])
+        return res
 
 def stripprefix(string, prefix):
     if string.startswith(prefix):
@@ -327,7 +337,7 @@ class ManifestData:
                 self.version[path] = head
 
     def find_repository(self, path):
-        while path != "":
+        while True:
             try:
                 r = self.repos[path]
                 return (r, path)
@@ -335,8 +345,6 @@ class ManifestData:
                 pass
 
             path = os.path.dirname(path)
-
-        return (None, None)
 
     def new_repository_class(self):
         return RoGitRepositoryHead
@@ -520,11 +528,10 @@ class DirState:
         (item.r, item.repo) = self.mdata.find_repository(path)
 
         if not item.r is None:
-            item.gitpath = os.path.relpath(path, item.repo)
-
-            if item.masterpath is None:
-                item.master = item.r.master()
-                item.masterpath = item.master + "/" + item.gitpath
+            if item.repo != "":
+                item.gitpath = os.path.relpath(path, item.repo)
+            else:
+                item.gitpath = path
 
         item.repopath = path
 
