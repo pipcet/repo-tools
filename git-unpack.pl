@@ -371,13 +371,25 @@ sub unpack_reflog_entry {
 	if -e "$outdir/old/tree-full" and -e "$outdir/new/tree-full";
 }
 
-sub unpack_reflog {
+sub unpack_reflog_dir {
     my ($unp, $o, $outdir) = @_;
 
     make_path($outdir);
+    my $i = 1;
     for my $entry ($o->entries) {
-	$unp->unpack_reflog_entry($entry, "$outdir/" . $entry->{new_id});
+	$unp->unpack_reflog_entry($entry, "$outdir/" . $i++);
     }
+}
+
+sub unpack_reflog_list {
+    my ($unp, $o, $outdir) = @_;
+    my $list = "";
+    make_path($outdir);
+    my $i = 1;
+    for my $entry (reverse $o->entries) {
+	$list .= $entry->{new_id} . "\n";
+    }
+    write_file("$outdir/list", $list);
 }
 
 sub unpack_reference {
@@ -386,12 +398,15 @@ sub unpack_reference {
     make_path($outdir);
     write_file("$outdir/name", $o->name);
     write_file("$outdir/type", $o->type);
+    write_file("$outdir/is_branch", $o->is_branch);
+    write_file("$outdir/is_remote", $o->is_remote);
+
     if ($o->target->isa("Git::Raw::Reference")) {
 	$unp->unpack_reference($o->target, "$outdir/target");
     } else {
 	symlink_relative($unp->{dir} . "/object/" . $o->target->id, "$outdir/target");
     }
-    $unp->unpack_reflog($o->reflog, "$outdir/reflog");
+    $unp->unpack_reflog_dir($o->reflog, "$outdir/reflog");
 }
 
 sub unpack_maybe {
