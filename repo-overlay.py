@@ -31,25 +31,25 @@ def delete_old_file(name):
     if os.path.isfile(name) or os.path.islink(name):
         os.system("rm " + name)
 
-def symlink_relative(target, directory, name):
-    makepath(directory)
-    relpath = os.path.relpath(target, directory)
+def symlink_relative(target, name):
+    makepath(os.path.dirname(name))
+    relpath = os.path.relpath(target, os.path.dirname(name))
     try:
-        os.symlink(relpath, os.path.join(directory, name))
+        os.symlink(relpath, name)
     except OSError:
         pass
 
-def symlink_absolute(target, directory, name):
-    makepath(directory)
+def symlink_absolute(target, name):
+    makepath(os.path.dirname(name))
 
     try:
-        os.symlink(target, os.path.join(directory, name))
+        os.symlink(target, name)
     except OSError:
         pass
 
-def copy_or_hardlink(target, directory, name):
-    makepath(directory)
-    shutil.copy2(target, os.path.join(directory, name))
+def copy_or_hardlink(target, name):
+    makepath(os.path.dirname(name))
+    shutil.copy2(target, name)
 
 def makepath(path):
     try:
@@ -229,7 +229,7 @@ class RoGitRepositoryHead(RoGitRepository):
         blob = self.pygit2repository[oid]
 
         delete_old_file(dst)
-        symlink_absolute(blob.data, os.path.dirname(dst), os.path.basename(dst))
+        symlink_absolute(blob.data, dst)
 
 class RoGitRepositoryHeadNew(RoGitRepositoryHead):
     def head(self):
@@ -297,10 +297,10 @@ class RoGitRepositoryWD(RoGitRepository):
         return res
 
     def create_file(self, file, dst):
-        copy_or_hardlink(file, os.path.dirname(dst), os.path.basename(dst))
+        copy_or_hardlink(file, dst)
 
     def create_link(self, file, dst):
-        copy_or_hardlink(file, os.path.dirname(dst), os.path.basename(dst))
+        copy_or_hardlink(file, dst)
 
 
 class RoEmptyRepository(RoRepository):
@@ -450,13 +450,13 @@ class Item:
                         target = os.path.join(r.master(), gitpath)
                     else:
                         target = os.path.join(xxxpwd, path)
-                    symlink_relative(target, os.path.dirname(os.path.join(outdir, path)),
-                                     os.path.basename(path))
+                    symlink_relative(target, os.path.join(outdir, path))
         elif itemtype == "file":
             if self.changed:
                 r.create_file(gitpath, outdir + "/" + repo + "/" + gitpath)
             else:
-                symlink_relative(os.path.join(r.master(), gitpath), os.path.dirname(os.path.join(outdir, repo, gitpath)), os.path.basename(gitpath))
+                symlink_relative(os.path.join(r.master(), gitpath),
+                                 os.path.join(outdir, repo, gitpath))
         elif itemtype == "link":
             r.create_link(gitpath, outdir + "/" + repo + "/" + gitpath)
 
@@ -610,7 +610,7 @@ def setup_repo_links():
         name = r.name
         linkdir = os.path.join(xxxoutdir, "repos-by-name", name)
         symlink_absolute(os.path.join(xxxpwd, r.relpath),
-                         linkdir, "repo")
+                         os.path.join(linkdir, "repo"))
 
     other_repos = []
     for path, dirs, files in os.walk(os.path.join(xxxoutdir, "other-repositories")):
@@ -623,7 +623,7 @@ def setup_repo_links():
 
         makepath(linkdir)
         symlink_absolute(os.path.join(xxxoutdir, "other-repositories", name),
-                         linkdir, "repo")
+                         os.path.join(linkdir, "repo"))
 
 def write_versions(mdata):
     for repo in mdata.repos:
