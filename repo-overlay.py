@@ -659,7 +659,7 @@ def backtick(cwd, *args):
 
 xxxoutdir = "/home/pip/tmp-repo-overlay"
 
-date = "Mach.1"
+date = "March.1"
 
 setup_repo_links()
 
