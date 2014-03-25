@@ -241,13 +241,13 @@ sub unpack_commit {
     for my $parent (@parents) {
 	my $id = $parent->id;
 	$knownids{$id}++;
-	symlink("../../../commit/$id", "$outdir/parents/$i");
+	symlink_relative($unp->{dir} . "/commit/$id", "$outdir/parents/$i");
 	$i++;
     }
     my $id = $o->tree->id;
     $knownids{$id}++;
-    symlink("../../tree-full/$id", "$outdir/tree-full");
-    symlink("../../tree-minimal/$id", "$outdir/tree-minimal");
+    symlink_relative($unp->{dir} . "/tree-full/$id", "$outdir/tree-full");
+    symlink_relative($unp->{dir} . "/tree-minimal/$id", "$outdir/tree-minimal");
 
     return $outdir;
 }
@@ -370,9 +370,9 @@ sub unpack_reference {
     write_file("$outdir/name", $o->name);
     write_file("$outdir/type", $o->type);
     if ($o->target->isa("Git::Raw::Reference")) {
-
+	$unp->unpack_reference($o->target, "$outdir/target");
     } else {
-	symlink("../../object/" . $o->target->id, "$outdir/target");
+	symlink_relative($unp->{dir} . "/object/" . $o->target->id, "$outdir/target");
     }
     $unp->unpack_reflog($o->reflog, "$outdir/reflog");
 }
@@ -390,7 +390,7 @@ sub unpack_maybe {
 
 sub new {
     my ($class, $repo, $dir) = @_;
-    my $unp = { repo => $repo, dir => $dir };
+    my $unp = { repo => $repo, dir => rel2abs($dir) };
 
     bless $unp, $class;
 
