@@ -5,16 +5,17 @@ use File::Path qw(make_path);
 use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
-#use File::Slurp qw(slurp);
-
+use File::Slurp qw(slurp read_dir);
+use List::Util qw(min max);
 use Git::Raw;
 #use Carp::Always;
 
 my $repository = Git::Raw::Repository->open(".");
 my $head = $repository->head;
 my $commit = $head->target;
-
 my %knownids;
+
+$knownids{$commit->id}++;
 
 # all ancestor directories of a path
 sub prefixes {
@@ -303,31 +304,54 @@ sub unpack_maybe {
     return 0;
 }
 
-$knownids{$commit->id}++;
-
-my $didsomething;
-do {
-    $didsomething = 0;
-    for my $id (sort keys %knownids) {
-	$didsomething += unpack_maybe($repository, $id, "metagit")
+while(my $arg = shift(@ARGV)) {
+    if ($arg eq "--help") {
+	die "unhelpful";
     }
-} while($didsomething);
+    if ($arg eq "--version") {
+	die "no version";
+    }
+    if ($arg eq "meta-unpack") {
+	my $didsomething;
+	do {
+	    $didsomething = 0;
+	    for my $id (sort keys %knownids) {
+		$didsomething += unpack_maybe($repository, $id, "metagit")
+	    }
+	} while($didsomething);
 
-for my $id (sort keys %knownids) {
-    if (-d "metagit/commit/$id") {
-	for (my $pid = 1; -l "metagit/commit/$id/parents/$pid"; $pid++) {
-	    system("cd metagit/commit/$id; mkdir -p diff; diff -urN parents/$pid/tree-full tree-full > diff/$pid");
+	for my $id (sort keys %knownids) {
+	    if (-d "metagit/commit/$id") {
+		for (my $pid = 1; -l "metagit/commit/$id/parents/$pid"; $pid++) {
+		    system("cd metagit/commit/$id; mkdir -p diff; diff -urN parents/$pid/tree-full tree-full > diff/$pid");
+		}
+	    }
 	}
+	exit(0);
     }
-}
+    if ($arg eq "meta-pack") {
+	system("mkdir metadotgit; cp -a .git metadotgit");
+	my $repo = Git::Raw::Repository->open("metadotgit");
 
-system("mkdir metadotgit; cp -a .git metadotgit");
-my $repo = Git::Raw::Repository->open("metadotgit");
+	my $packer = Packer->new($repo);
 
-my $packer = Packer->new($repo);
-
-for my $id (sort keys %knownids) {
-    if (-d "metagit/commit/$id") {
-	$packer->pack_commit("metagit/commit/$id");
+	for my $id (read_dir("metagit/commit")) {
+	    if (-d "metagit/commit/$id") {
+		$packer->pack_commit("metagit/commit/$id");
+	    }
+	}
+	exit(0);
     }
+    if ($arg eq "meta-addparent") {
+	my ($child, $parent) = @ARGV;
+
+	die unless -d "metagit/commit/$child" and -d "metagit/commit/$parent";
+
+	my $i = max(read_dir("metagit/commit/$child/parents")) + 1;
+
+	symlink("../../../commit/$parent", "metagit/commit/$child/parents/$i");
+
+	exit(0);
+    }
+
 }
