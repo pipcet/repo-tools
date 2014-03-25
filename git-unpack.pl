@@ -68,13 +68,6 @@ sub write_file {
 sub unpack_signature {
     my ($o, $outdir) = @_;
 
-
-    return $outdir;
-}
-
-sub unpack_signature {
-    my ($o, $outdir) = @_;
-
     make_path($outdir);
 
     write_file("$outdir/name", $o->name);
