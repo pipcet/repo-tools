@@ -409,6 +409,49 @@ sub unpack_reference {
     $unp->unpack_reflog_dir($o->reflog, "$outdir/reflog");
 }
 
+sub unpack_branch {
+    my ($unp, $o, $outdir) = @_;
+
+    make_path($outdir);
+    write_file("$outdir/name", $o->name);
+    write_file("$outdir/type", $o->type);
+    write_file("$outdir/is_branch", $o->is_branch);
+    write_file("$outdir/is_remote", $o->is_remote);
+    # this doesn't work at all for branches that do not have an upstream
+    #$unp->unpack_reference($o->upstream, "$outdir/upstream");
+
+    if ($o->target->isa("Git::Raw::Reference")) {
+	$unp->unpack_reference($o->target, "$outdir/target");
+    } else {
+	symlink_relative($unp->{dir} . "/object/" . $o->target->id, "$outdir/target");
+    }
+    $unp->unpack_reflog_dir($o->reflog, "$outdir/reflog");
+}
+
+sub unpack_tag {
+    my ($unp, $o, $outdir) = @_;
+
+    make_path($outdir);
+    write_file("$outdir/name", $o->name);
+    write_file("$outdir/message", $o->message);
+    $unp->unpack_signature($o->tagger, "$outdir/tagger");
+
+    if ($o->target->isa("Git::Raw::Reference")) {
+	$unp->unpack_reference($o->target, "$outdir/target");
+    } else {
+	symlink_relative($unp->{dir} . "/object/" . $o->target->id, "$outdir/target");
+    }
+    $unp->unpack_reflog_dir($o->reflog, "$outdir/reflog");
+}
+
+sub unpack_remote {
+    my ($unp, $o, $outdir) = @_;
+
+    make_path($outdir);
+    write_file("$outdir/name", $o->name);
+    write_file("$outdir/url", $o->url);
+}
+
 sub unpack_maybe {
     my ($unp, $repo, $id, $outdir) = @_;
 
@@ -450,7 +493,20 @@ while(my $arg = shift(@ARGV)) {
 	} while($didsomething);
 
 	for my $ref ($repository->refs) {
-	    $unp->unpack_reference($ref, "metagit/" . "refs/" . ($ref->name =~ s/\//_/msgr));
+	    $unp->unpack_reference($ref, "metagit/" . "ref/" . ($ref->name =~ s/\//_/msgr));
+	}
+
+	#mysteriously broken
+	#for my $tag ($repository->tags) {
+	#    $unp->unpack_tag($tag, "metagit/" . "tag/" . ($tag->name =~ s/\//_/msgr));
+	#}
+
+	for my $branch ($repository->branches) {
+	    $unp->unpack_branch($branch, "metagit/" . "branch/" . ($branch->name =~ s/\//_/msgr));
+	}
+
+	for my $remote ($repository->remotes) {
+	    $unp->unpack_remote($remote, "metagit/" . "remote/" . ($remote->name =~ s/\//_/msgr));
 	}
 
 	for my $id (sort keys %knownids) {
