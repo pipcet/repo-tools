@@ -128,7 +128,34 @@ sub pack_tree_full {
     return $tree;
 }
 
-sub pack_branch {
+sub pack_object {
+    my ($packer, $outdir) = @_;
+    my $realdir = readlink($outdir);
+    my $type = basename(xdirname($realdir));
+
+    if ($type eq "tree-full") {
+	return $packer->pack_tree_full($realdir);
+    } elsif ($type eq "commit") {
+	return $packer->pack_commit($realdir);
+    } else {
+	die "cannot handle $realdir";
+    }
+}
+
+sub pack_reference {
+    my ($packer, $outdir) = @_;
+    my $repo = $packer->{repo};
+
+    my $name = read_file("$outdir/name");
+    my $target;
+    if (-l "$outdir/target") {
+	$target = $packer->pack_reference("$outdir/target");
+    } else {
+	$target = $packer->pack_object(readlink("$outdir/target"));
+    }
+
+    # XXX branches
+    return Git::Raw::Reference->create($name, $repo, $target);
 }
 
 sub new {
