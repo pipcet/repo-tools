@@ -278,7 +278,7 @@ sub unpack_tree_entry_minimal {
     write_file("$outdir/filemode", $filemode);
 
     my $id = $o->id;
-    symlink_relative("../../../../../object/$id", "$outdir/object");
+    symlink_relative($unp->{dir} . "/object/$id", "$outdir/object");
 
     return $outdir;
 }
@@ -353,7 +353,7 @@ sub unpack_object {
 	die;
     }
 
-    symlink_relative("../../$path", "$outdir/object/$id");
+    symlink_relative($unp->{dir} . "/$path", "$outdir/object/$id");
 
     return "$outdir/object/$id";
 }
