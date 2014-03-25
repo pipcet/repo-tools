@@ -313,7 +313,6 @@ class RoEmptyRepository(RoRepository):
     def find_siblings_and_types(self, dirstate, dummy):
         res = []
         for repo in dirstate.mdata.repos:
-            print repo
             res.append([repo, "dir"])
         return res
 
@@ -621,7 +620,6 @@ def setup_repo_links():
     for repo in other_repos:
         name=stripprefix(repo, os.path.join(xxxoutdir, "other-repositories")+"/")
         linkdir=os.path.join(xxxoutdir, "repos-by-name", name)
-        print "repo", name, linkdir
 
         makepath(linkdir)
         symlink_absolute(os.path.join(xxxoutdir, "other-repositories", name),
@@ -669,7 +667,6 @@ if args.new_versions:
 
 if args.new_versions:
     manifest_head = backtick(xxxpwd + "/.repo/manifests", "git", "log", "-1", "--first-parent", "--pretty=tformat:%H", "--until='" + date + "'")
-    print "manifest_head", manifest_head
 else:
     manifest_head = ManifestData().read_version(".repo/manifests")
 
