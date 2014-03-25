@@ -463,6 +463,15 @@ sub unpack_maybe {
     return 0;
 }
 
+sub unpack_stash {
+    my ($unp, $index, $message, $oid, $outdir) = @_;
+    my $repo = $unp->{repo};
+    make_path($outdir);
+    write_file("$outdir/index", $index);
+    write_file("$outdir/message", $message);
+    $unp->unpack_object($repo->lookup($oid), "$outdir/stash_object");
+}
+
 sub new {
     my ($class, $repo, $dir) = @_;
     my $unp = { repo => $repo, dir => rel2abs($dir) };
@@ -508,6 +517,13 @@ while(my $arg = shift(@ARGV)) {
 	for my $remote ($repository->remotes) {
 	    $unp->unpack_remote($remote, "metagit/" . "remote/" . ($remote->name =~ s/\//_/msgr));
 	}
+
+	Git::Raw::Stash->foreach($repository,
+				 sub {
+				     my ($index, $message, $oid) = @_;
+				     $unp->unpack_stash($index, $message, $oid, "metagit/stash/$index");
+				     return 0;
+				 });
 
 	for my $id (sort keys %knownids) {
 	    if (-d "metagit/commit/$id") {
