@@ -969,7 +969,7 @@ sub create {
 
 	if (!$dirstate->changed($dir)) {
 	    if (! (-e "$outdir/$dir" || -l "$outdir/$dir")) {
-		symlink_relative("$pwd/$dir", "$outdir/$dir") or die;
+		symlink_relative($r->master . "/$gitpath", "$outdir/$dir") or die;
 	    }
 	} else {
 	    mkdirp("$outdir/$dir");
