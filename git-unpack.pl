@@ -149,6 +149,9 @@ sub pack_tree_full {
     return $tree;
 }
 
+sub pack_branch {
+}
+
 sub new {
     my ($class, $repo) = @_;
 
@@ -204,7 +207,7 @@ sub unpack_commit {
     return $outdir;
 }
 
-sub unpack_entry_minimal {
+sub unpack_tree_entry_minimal {
     my ($o, $outdir) = @_;
 
     make_path(xdirname($outdir));
@@ -224,13 +227,13 @@ sub unpack_tree_minimal {
 
     make_path($outdir);
     for my $entry (@{$o->entries}) {
-	unpack_entry_minimal($entry, "$outdir/entries/" . $entry->name)
+	unpack_tree_entry_minimal($entry, "$outdir/entries/" . $entry->name)
     }
 
     return $outdir;
 }
 
-sub unpack_entry_full {
+sub unpack_tree_entry_full {
     my ($o, $outdir) = @_;
 
     make_path(xdirname($outdir));
@@ -257,7 +260,7 @@ sub unpack_tree_full {
 
     make_path($outdir);
     for my $entry (@{$o->entries}) {
-	unpack_entry_full($entry, "$outdir/" . $entry->name)
+	unpack_tree_entry_full($entry, "$outdir/" . $entry->name)
     }
 
     return $outdir;
@@ -293,6 +296,41 @@ sub unpack_object {
     return "$outdir/object/$id";
 }
 
+sub unpack_reflog_entry {
+    my ($o, $outdir) = @_;
+
+    make_path($outdir);
+    unpack_signature($o->{committer}, "$outdir/committer");
+    write_file("$outdir/message", $o->{message});
+    symlink("../../../../object/" . $o->{new_id}, "$outdir/new");
+    symlink("../../../../object/" . $o->{old_id}, "$outdir/old");
+
+    #system("diff -urN old new > diff");
+}
+
+sub unpack_reflog {
+    my ($o, $outdir) = @_;
+
+    make_path($outdir);
+    for my $entry ($o->entries) {
+	unpack_reflog_entry($entry, "$outdir/" . $entry->{new_id});
+    }
+}
+
+sub unpack_reference {
+    my ($o, $outdir) = @_;
+
+    make_path($outdir);
+    write_file("$outdir/name", $o->name);
+    write_file("$outdir/type", $o->type);
+    if ($o->target->isa("Git::Raw::Reference")) {
+
+    } else {
+	symlink("../../object/" . $o->target->id, "$outdir/target");
+    }
+    unpack_reflog($o->reflog, "$outdir/reflog");
+}
+
 sub unpack_maybe {
     my ($repo, $id, $outdir) = @_;
 
@@ -319,6 +357,10 @@ while(my $arg = shift(@ARGV)) {
 		$didsomething += unpack_maybe($repository, $id, "metagit")
 	    }
 	} while($didsomething);
+
+	for my $ref ($repository->refs) {
+	    unpack_reference($ref, "metagit/" . "refs/" . ($ref->name =~ s/\//_/msgr));
+	}
 
 	for my $id (sort keys %knownids) {
 	    if (-d "metagit/commit/$id") {
