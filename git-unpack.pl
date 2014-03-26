@@ -179,6 +179,15 @@ use File::Path qw(make_path);
 use Getopt::Long qw(GetOptions GetOptionsFromString :config auto_version auto_help);
 use File::PathConvert qw(abs2rel rel2abs);
 use File::Copy::Recursive qw(fcopy);
+use DateTime;
+
+sub format_iso8601 {
+    my ($unixseconds) = @_;
+
+    my $dt = DateTime->from_epoch(epoch => $unixseconds);
+
+    return $dt->ymd("") . "T" . $dt->hms("");
+}
 
 sub xdirname {
     return dirname(@_) =~ s/^\.$//r;
@@ -390,7 +399,9 @@ sub unpack_reflog_dir {
     make_path($outdir);
     my $i = 1;
     for my $entry ($o->entries) {
-	$unp->unpack_reflog_entry($entry, "$outdir/" . $i++);
+	my $gitseconds = $entry->{committer}->time;
+	my $isodate = format_iso8601($gitseconds);
+	$unp->unpack_reflog_entry($entry, "$outdir/$isodate-" . $i++);
     }
 }
 
