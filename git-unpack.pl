@@ -54,7 +54,7 @@ sub symlink_relative {
     mkdirp(xdirname($dst)) or die "cannot make symlink $dst -> $relsrc";
 
     if (-l $dst) {
-	return 1;
+	unlink($dst);
     }
 
     symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
@@ -217,7 +217,7 @@ sub symlink_relative {
     mkdirp(xdirname($dst)) or die "cannot make symlink $dst -> $relsrc";
 
     if (-l $dst) {
-	return 1;
+	unlink($dst);
     }
 
     symlink($relsrc, $dst) or die "cannot make symlink $dst -> $relsrc";
