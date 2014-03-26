@@ -357,8 +357,10 @@ sub unpack_object {
 	$path = $unp->unpack_tree_minimal($o, "$outdir/tree-minimal/$id");
     } elsif ($o->isa("Git::Raw::Blob")) {
 	$path = $unp->unpack_blob($o, "$outdir/blob/$id");
+    } elsif ($o->isa("Git::Raw::Tag")) {
+	$path = $unp->unpack_tag($o, "$outdir/tag/$id");
     } else {
-	die;
+	die "$o";
     }
 
     symlink_relative($unp->{dir} . "/$path", "$outdir/object/$id");
@@ -513,10 +515,9 @@ while(my $arg = shift(@ARGV)) {
 	    $unp->unpack_reference($ref, "metagit/" . "ref/" . ($ref->name =~ s/\//_/msgr));
 	}
 
-	#mysteriously broken
-	#for my $tag ($repository->tags) {
-	#    $unp->unpack_tag($tag, "metagit/" . "tag/" . ($tag->name =~ s/\//_/msgr));
-	#}
+	for my $tag ($repository->tags) {
+	    $unp->unpack_tag($tag, "metagit/" . "tag/" . ($tag->name =~ s/\//_/msgr));
+	}
 
 	for my $branch ($repository->branches) {
 	    $unp->unpack_branch($branch, "metagit/" . "branch/" . ($branch->name =~ s/\//_/msgr));
