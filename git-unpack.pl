@@ -360,14 +360,18 @@ sub unpack_object {
     my $path;
 
     if ($o->isa("Git::Raw::Commit")) {
-	$path = $unp->unpack_commit($o, "$outdir/commit/$id");
+	my $gitseconds = $o->committer->time;
+	my $isodate = format_iso8601($gitseconds);
+	$path = $unp->unpack_commit($o, "$outdir/commit/$isodate-$id");
     } elsif ($o->isa("Git::Raw::Tree")) {
 	$path = $unp->unpack_tree_full($o, "$outdir/tree-full/$id");
 	$path = $unp->unpack_tree_minimal($o, "$outdir/tree-minimal/$id");
     } elsif ($o->isa("Git::Raw::Blob")) {
 	$path = $unp->unpack_blob($o, "$outdir/blob/$id");
     } elsif ($o->isa("Git::Raw::Tag")) {
-	$path = $unp->unpack_tag($o, "$outdir/tag/$id");
+	my $gitseconds = $o->tagger->time;
+	my $isodate = format_iso8601($gitseconds);
+	$path = $unp->unpack_tag($o, "$outdir/tag/$isodate-$id");
     } else {
 	die "$o";
     }
