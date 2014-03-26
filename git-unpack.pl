@@ -451,7 +451,6 @@ sub unpack_tag {
     } else {
 	symlink_relative($unp->{dir} . "/object/" . $o->target->id, "$outdir/target");
     }
-    $unp->unpack_reflog_dir($o->reflog, "$outdir/reflog");
 }
 
 sub unpack_remote {
