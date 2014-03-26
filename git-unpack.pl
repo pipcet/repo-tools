@@ -286,7 +286,7 @@ sub unpack_tree_entry_minimal {
     write_file("$outdir/filemode", $filemode);
 
     my $id = $o->id;
-    symlink_relative($unp->{dir} . "/object/$id", "$outdir/object");
+    symlink_relative($unp->require_object($id), "$outdir/object");
 
     return $outdir;
 }
@@ -363,7 +363,7 @@ sub unpack_object {
 	die "$o";
     }
 
-    symlink_relative($unp->{dir} . "/$path", "$outdir/object/$id");
+    symlink_relative("$path", "$outdir/object/$id");
 
     return "$outdir/object/$id";
 }
@@ -374,8 +374,11 @@ sub unpack_reflog_entry {
     make_path($outdir);
     $unp->unpack_signature($o->{committer}, "$outdir/committer");
     write_file("$outdir/message", $o->{message});
-    symlink_relative($unp->{dir} . "/object/" . $o->{new_id}, "$outdir/new");
-    symlink_relative($unp->{dir} . "/object/" . $o->{old_id}, "$outdir/old");
+
+    symlink_relative($unp->require_object($o->{new_id}), "$outdir/new")
+	unless $o->{new_id} =~ /^0*$/;
+    symlink_relative($unp->require_object($o->{old_id}), "$outdir/old")
+	unless $o->{old_id} =~ /^0*$/;
 
     system("cd $outdir; diff -urN old/tree-full new/tree-full > diff.diff")
 	if -e "$outdir/old/tree-full" and -e "$outdir/new/tree-full";
@@ -433,7 +436,7 @@ sub unpack_branch {
     if ($o->target->isa("Git::Raw::Reference")) {
 	$unp->unpack_reference($o->target, "$outdir/target");
     } else {
-	symlink_relative($unp->{dir} . "/object/" . $o->target->id, "$outdir/target");
+	symlink_relative($unp->require_object($o->target->id), "$outdir/target");
     }
     $unp->unpack_reflog_dir($o->reflog, "$outdir/reflog");
 }
@@ -449,7 +452,7 @@ sub unpack_tag {
     if ($o->target->isa("Git::Raw::Reference")) {
 	$unp->unpack_reference($o->target, "$outdir/target");
     } else {
-	symlink_relative($unp->{dir} . "/object/" . $o->target->id, "$outdir/target");
+	symlink_relative($unp->require_object($o->target->id), "$outdir/target");
     }
 }
 
@@ -462,7 +465,9 @@ sub unpack_remote {
 }
 
 sub unpack_maybe {
-    my ($unp, $repo, $id, $outdir) = @_;
+    my ($unp, $id) = @_;
+    my $repo = $unp->{repo};
+    my $outdir = $unp->{dir};
 
     if (!-l "$outdir/object/$id" and !-e "$outdir/object/$id") {
 	$unp->unpack_object($repo->lookup($id), $outdir);
@@ -472,13 +477,27 @@ sub unpack_maybe {
     return 0;
 }
 
+sub require_object {
+    my ($unp, $id) = @_;
+    my $outdir = $unp->{dir};
+
+    if (!-l "$outdir/object/$id" and !-e "$outdir/object/$id") {
+	my $repo = $unp->{repo};
+
+	$unp->unpack_object($repo->lookup($id), $outdir);
+	return 1;
+    }
+
+    return "$outdir/object/$id";
+}
+
 sub unpack_stash {
     my ($unp, $index, $message, $oid, $outdir) = @_;
     my $repo = $unp->{repo};
     make_path($outdir);
     write_file("$outdir/index", $index);
     write_file("$outdir/message", $message);
-    $unp->unpack_object($repo->lookup($oid), "$outdir/stash_object");
+    symlink_relative($unp->{dir} . "/object/$oid", "$outdir/commit");
 }
 
 sub new {
@@ -506,24 +525,24 @@ while(my $arg = shift(@ARGV)) {
 	do {
 	    $didsomething = 0;
 	    for my $id (sort keys %knownids) {
-		$didsomething += $unp->unpack_maybe($repository, $id, "metagit")
+		$didsomething += $unp->unpack_maybe($id)
 	    }
 	} while($didsomething);
 
 	for my $ref ($repository->refs) {
-	    $unp->unpack_reference($ref, "metagit/" . "ref/" . ($ref->name =~ s/\//_/msgr));
+	    $unp->unpack_reference($ref, $unp->{dir} . "/ref/" . ($ref->name =~ s/\//_/msgr));
 	}
 
 	for my $tag ($repository->tags) {
-	    $unp->unpack_tag($tag, "metagit/" . "tag/" . ($tag->name =~ s/\//_/msgr));
+	    $unp->unpack_tag($tag, $unp->{dir} . "/tag/" . ($tag->name =~ s/\//_/msgr));
 	}
 
 	for my $branch ($repository->branches) {
-	    $unp->unpack_branch($branch, "metagit/" . "branch/" . ($branch->name =~ s/\//_/msgr));
+	    $unp->unpack_branch($branch, $unp->{dir} . "/branch/" . ($branch->name =~ s/\//_/msgr));
 	}
 
 	for my $remote ($repository->remotes) {
-	    $unp->unpack_remote($remote, "metagit/" . "remote/" . ($remote->name =~ s/\//_/msgr));
+	    $unp->unpack_remote($remote, $unp->{dir} . "/remote/" . ($remote->name =~ s/\//_/msgr));
 	}
 
 	Git::Raw::Stash->foreach($repository,
